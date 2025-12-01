@@ -27,6 +27,7 @@
         import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
+        // --- LIVE DATABASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyAefsgDE8YT1MLwC0wTEsFB799vKbStgyk",
             authDomain: "njra-policies.firebaseapp.com",
@@ -44,6 +45,7 @@
             window.db = getFirestore(app);
             window.auth = getAuth(app);
             
+            // Expose services
             window.collection = collection;
             window.addDoc = addDoc;
             window.getDocs = getDocs;
@@ -85,6 +87,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
         
+        /* --- CORE APP CONTAINER --- */
         #njra-app-root {
             font-family: 'Lato', sans-serif;
             background-color: #f8fafc;
@@ -100,6 +103,7 @@
         
         #njra-app-root *, #njra-app-root *::before, #njra-app-root *::after { box-sizing: inherit; }
 
+        /* --- BUTTON OVERRIDES --- */
         .njra-btn {
             display: inline-flex;
             align-items: center;
@@ -114,15 +118,32 @@
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         
-        .njra-btn-primary { background-color: #af3030 !important; color: #ffffff !important; }
-        .njra-btn-primary:hover { background-color: #942626 !important; }
+        .njra-btn-primary {
+            background-color: #af3030 !important; /* RED */
+            color: #ffffff !important;
+        }
+        .njra-btn-primary:hover {
+            background-color: #942626 !important;
+        }
 
-        .njra-btn-secondary { background-color: #444444 !important; color: #ffffff !important; }
-        .njra-btn-secondary:hover { background-color: #000000 !important; }
+        .njra-btn-secondary {
+            background-color: #444444 !important; /* DARK GRAY */
+            color: #ffffff !important;
+        }
+        .njra-btn-secondary:hover {
+            background-color: #000000 !important;
+        }
 
-        .njra-btn-outline { background-color: #e2e8f0 !important; color: #444444 !important; border: 1px solid #94a3b8 !important; }
-        .njra-btn-outline:hover { background-color: #cbd5e1 !important; }
+        .njra-btn-outline {
+            background-color: #e2e8f0 !important; /* LIGHT GRAY */
+            color: #444444 !important;
+            border: 1px solid #94a3b8 !important;
+        }
+        .njra-btn-outline:hover {
+            background-color: #cbd5e1 !important;
+        }
 
+        /* --- TYPOGRAPHY RESETS --- */
         #njra-app-root h1 { font-size: 2em; font-weight: 700; margin-bottom: 0.5em; line-height: 1.2; margin-top: 0; color: #af3030; }
         #njra-app-root h2 { font-size: 1.5em; font-weight: 600; margin-bottom: 0.5em; line-height: 1.3; margin-top: 1em; color: #444444; }
         #njra-app-root h3 { font-size: 1.17em; font-weight: 600; margin-bottom: 0.5em; color: #444444; }
@@ -169,7 +190,8 @@
             // AI / Document State
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
-            const [uploadQueue, setUploadQueue] = useState([]); // List of selected files
+            const [uploadQueue, setUploadQueue] = useState([]); 
+            const [processedData, setProcessedData] = useState([]); // Store AI results for review
 
             useEffect(() => {
                 const init = async () => {
@@ -192,9 +214,8 @@
                 init();
             }, []);
 
-            // --- AI DOC HANDLER ---
             const handleApiKeyChange = (e) => {
-                const key = e.target.value.trim(); // Trim whitespace automatically
+                const key = e.target.value.trim();
                 setApiKey(key);
                 localStorage.setItem('njra_openai_key', key);
             };
@@ -215,25 +236,22 @@
                 setUploadQueue(prev => prev.filter((_, i) => i !== idx));
             };
 
-            const processAndSave = async () => {
+            const processFiles = async () => {
                 if (!apiKey) { alert("Please enter an OpenAI API Key first."); return; }
                 if (uploadQueue.length === 0) return;
 
                 setIsProcessing(true);
-                let successCount = 0;
-                let updateCount = 0;
+                let combinedJson = [];
 
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
                     setStatus(`Processing ${i+1}/${uploadQueue.length}: ${file.name}...`);
 
                     try {
-                        // 1. Read Word Doc
                         const arrayBuffer = await file.arrayBuffer();
                         const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
                         const rawText = result.value;
 
-                        // 2. Send to OpenAI
                         const prompt = `
                             You are a medical policy assistant. 
                             I will give you the raw text of a respiratory therapy policy.
@@ -243,6 +261,7 @@
                                 {
                                     "title": "Extract Title",
                                     "code": "Extract Code (e.g. RT-00X) or generate one if missing",
+                                    "category": "Choose a category (e.g., 'Emergency', 'Clinical', 'Equipment', 'Admin')",
                                     "content": "The full policy text formatted as clean HTML (use <h2>, <p>, <ul>, <li>, <strong>). Correct grammar and spelling.",
                                     "questions": [
                                         {
@@ -277,29 +296,10 @@
                         const data = await response.json();
                         let content = data.choices[0].message.content;
                         let jsonObject = JSON.parse(content);
-                        let policyData;
                         
-                        if (jsonObject.policies) policyData = jsonObject.policies[0];
-                        else if (Array.isArray(jsonObject)) policyData = jsonObject[0];
-                        else policyData = jsonObject;
-
-                        // 3. Save Immediately to Firebase
-                        let exists = false;
-                        let existingId = null;
-
-                        if (policyData.code) {
-                            const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', policyData.code));
-                            const snapshot = await window.getDocs(q);
-                            if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
-                        }
-
-                        if (exists) { 
-                            await window.updateDoc(window.doc(window.db, 'policies', existingId), policyData); 
-                            updateCount++;
-                        } else { 
-                            await window.addDoc(window.collection(window.db, 'policies'), policyData); 
-                            successCount++; 
-                        }
+                        if (jsonObject.policies) combinedJson.push(...jsonObject.policies);
+                        else if (Array.isArray(jsonObject)) combinedJson.push(...jsonObject);
+                        else combinedJson.push(jsonObject);
 
                     } catch (err) {
                         console.error(err);
@@ -307,10 +307,38 @@
                     }
                 }
 
+                setProcessedData(combinedJson);
                 setStatus("");
                 setIsProcessing(false);
-                setUploadQueue([]); // Clear queue on success
-                alert(`Batch Complete!\nCreated: ${successCount}\nUpdated: ${updateCount}`);
+                setUploadQueue([]); 
+            };
+
+            const handleCategoryChange = (idx, newCat) => {
+                const newData = [...processedData];
+                newData[idx].category = newCat;
+                setProcessedData(newData);
+            };
+
+            const saveToDatabase = async () => {
+                if(!confirm(`Saving ${processedData.length} policies to Live Database... Continue?`)) return;
+                
+                setStatus("Saving to Database...");
+                let addedCount = 0;
+                let updatedCount = 0;
+                for(let item of processedData) {
+                    let exists = false;
+                    let existingId = null;
+                    if (item.code) {
+                        const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
+                        const snapshot = await window.getDocs(q);
+                        if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
+                    }
+                    if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
+                    else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
+                }
+                setStatus("");
+                alert(`Success!\n\nNew Policies: ${addedCount}\nUpdated Policies: ${updatedCount}`);
+                setProcessedData([]); 
             };
 
             const handleDelete = async (id) => {
@@ -323,16 +351,22 @@
                 const [searchTerm, setSearchTerm] = useState("");
                 const [viewMode, setViewMode] = useState('list'); 
 
+                // Group by Category
+                const groupedPolicies = policies.reduce((acc, policy) => {
+                    const cat = policy.category || "Uncategorized";
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(policy);
+                    return acc;
+                }, {});
+
+                // Filter logic
                 const filteredPolicies = policies.filter(p => 
                     p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
                 );
 
-                filteredPolicies.sort((a, b) => {
-                    const codeA = a.code || "";
-                    const codeB = b.code || "";
-                    return codeA.localeCompare(codeB) || a.title.localeCompare(b.title);
-                });
+                // If searching, just show flat list. If not, show grouped.
+                const showGrouped = searchTerm === "";
 
                 return (
                     <div className="w-full">
@@ -356,24 +390,52 @@
                             </div>
                         </div>
 
-                        {viewMode === 'grid' ? (
-                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
-                                {filteredPolicies.map(p => (
-                                    <div key={p.id} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
-                                        <div onClick={() => onSelectPolicy(p)} className="cursor-pointer group">
-                                            <div className="flex items-center mb-4">
-                                                <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
-                                                <div className="ml-4 overflow-hidden"><div className="text-xs text-gray-500 font-mono">{p.code}</div><div className="font-bold text-njra-900 truncate">{p.title}</div></div>
-                                            </div>
+                        {showGrouped ? (
+                            Object.keys(groupedPolicies).sort().map(cat => (
+                                <div key={cat} className="mb-8">
+                                    <h3 className="text-xl font-bold text-njra-900 mb-3 border-b border-gray-200 pb-1">{cat}</h3>
+                                    {viewMode === 'grid' ? (
+                                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
+                                            {groupedPolicies[cat].map(p => (
+                                                <div key={p.id} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
+                                                    <div onClick={() => onSelectPolicy(p)} className="cursor-pointer group">
+                                                        <div className="flex items-center mb-4">
+                                                            <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
+                                                            <div className="ml-4 overflow-hidden"><div className="text-xs text-gray-500 font-mono">{p.code}</div><div className="font-bold text-njra-900 truncate">{p.title}</div></div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
+                                                        <button onClick={() => onSelectPolicy(p)} className="text-njra-500 text-sm font-bold hover:underline">View Policy</button>
+                                                        <button onClick={() => onTakeQuiz(p)} className="njra-btn njra-btn-secondary text-xs py-1 px-2"><i className="fas fa-graduation-cap mr-1"></i> Competency</button>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
-                                            <button onClick={() => onSelectPolicy(p)} className="text-njra-500 text-sm font-bold hover:underline">View Policy</button>
-                                            <button onClick={() => onTakeQuiz(p)} className="njra-btn njra-btn-secondary text-xs py-1 px-2"><i className="fas fa-graduation-cap mr-1"></i> Competency</button>
+                                    ) : (
+                                        <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th></tr></thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {groupedPolicies[cat].map((policy, idx) => (
+                                                        <tr key={policy.id} className={`transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}>
+                                                            <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
+                                                            <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">{policy.title}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
+                                                                    <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    )}
+                                </div>
+                            ))
                         ) : (
+                            // Flat list for search results
                             <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th></tr></thead>
@@ -394,6 +456,7 @@
                                 </table>
                             </div>
                         )}
+                        
                         {filteredPolicies.length === 0 && (<div className="text-center py-12 bg-white rounded-lg border border-gray-200 border-dashed"><i className="fas fa-search text-4xl text-gray-300 mb-4"></i><p className="text-gray-500 text-lg">No policies found matching your search.</p><button onClick={() => setSearchTerm('')} className="mt-4 text-njra-500 hover:underline font-bold">Clear Search</button></div>)}
                     </div>
                 );
@@ -580,6 +643,39 @@
                                             <div className="flex gap-3">
                                                 <button onClick={() => setUploadQueue([])} className="njra-btn njra-btn-secondary">Clear All</button>
                                                 <button onClick={processAndSave} className="njra-btn njra-btn-primary">Process & Save to Database</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Review Processed Data Section */}
+                                    {processedData.length > 0 && (
+                                        <div className="border-t border-gray-200 pt-6">
+                                            <h4 className="font-bold text-gray-800 mb-2">Review Processed Policies ({processedData.length})</h4>
+                                            <p className="text-sm text-gray-500 mb-4">Edit categories if needed before saving.</p>
+                                            
+                                            <div className="space-y-3 mb-6">
+                                                {processedData.map((item, idx) => (
+                                                    <div key={idx} className="bg-white p-3 rounded border border-gray-200 flex flex-col md:flex-row gap-3 items-start md:items-center">
+                                                        <div className="flex-grow">
+                                                            <div className="font-bold text-sm">{item.title}</div>
+                                                            <div className="text-xs text-gray-500">{item.code}</div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 w-full md:w-auto">
+                                                            <label className="text-xs text-gray-500 font-bold">Category:</label>
+                                                            <input 
+                                                                type="text" 
+                                                                className="border border-gray-300 p-1 rounded text-sm flex-grow" 
+                                                                value={item.category || ""} 
+                                                                onChange={(e) => handleCategoryChange(idx, e.target.value)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            
+                                            <div className="flex gap-3 justify-end">
+                                                <button onClick={() => setProcessedData([])} className="njra-btn njra-btn-secondary">Discard</button>
+                                                <button onClick={saveToDatabase} className="njra-btn njra-btn-primary">Save All to Database</button>
                                             </div>
                                         </div>
                                     )}
