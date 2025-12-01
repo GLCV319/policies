@@ -151,14 +151,6 @@
         .njra-btn-outline:hover {
             background-color: #cbd5e1 !important;
         }
-        
-        .njra-btn-danger {
-            background-color: #dc2626 !important;
-            color: white !important;
-        }
-        .njra-btn-danger:hover {
-            background-color: #b91c1c !important;
-        }
 
         /* --- TYPOGRAPHY RESETS --- */
         #njra-app-root h1 { font-size: 2em; font-weight: 700; margin-bottom: 0.5em; line-height: 1.2; margin-top: 0; color: #af3030; }
@@ -180,6 +172,8 @@
             .print-only { display: block !important; }
             body { background: white; color: black; }
             #njra-app-root { border: none; width: 100% !important; margin: 0 !important; }
+            /* Force show questions when printing */
+            .quiz-question-block { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
         }
         .print-only { display: none; }
     </style>
@@ -271,7 +265,7 @@
                 catch(e) { alert("Delete failed: " + e.message); }
             };
 
-            const PolicyList = ({ policies, onSelectPolicy }) => {
+            const PolicyList = ({ policies, onSelectPolicy, onTakeQuiz }) => {
                 const [searchTerm, setSearchTerm] = useState("");
                 const [viewMode, setViewMode] = useState('list'); 
 
@@ -337,15 +331,20 @@
                         {viewMode === 'grid' ? (
                             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
                                 {filteredPolicies.map(p => (
-                                    <div key={p.id} onClick={() => onSelectPolicy(p)} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-lg hover:border-njra-500 transition-all group">
-                                        <div className="flex items-center mb-4">
-                                            <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
-                                            <div className="ml-4 overflow-hidden">
-                                                <div className="text-xs text-gray-500 font-mono">{p.code}</div>
-                                                <div className="font-bold text-njra-900 truncate">{p.title}</div>
+                                    <div key={p.id} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
+                                        <div onClick={() => onSelectPolicy(p)} className="cursor-pointer group">
+                                            <div className="flex items-center mb-4">
+                                                <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
+                                                <div className="ml-4 overflow-hidden">
+                                                    <div className="text-xs text-gray-500 font-mono">{p.code}</div>
+                                                    <div className="font-bold text-njra-900 truncate">{p.title}</div>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="text-njra-500 text-sm font-bold group-hover:translate-x-1 transition-transform inline-block">View Policy &rarr;</div>
+                                        <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
+                                            <button onClick={() => onSelectPolicy(p)} className="text-njra-500 text-sm font-bold hover:underline">View Policy</button>
+                                            <button onClick={() => onTakeQuiz(p)} className="njra-btn njra-btn-secondary text-xs py-1 px-2"><i className="fas fa-graduation-cap mr-1"></i> Competency</button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -356,20 +355,22 @@
                                         <tr>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th>
-                                            <th scope="col" className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Action</th>
+                                            <th scope="col" className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {filteredPolicies.map((policy, idx) => (
                                             <tr 
                                                 key={policy.id} 
-                                                onClick={() => onSelectPolicy(policy)} 
-                                                className={`cursor-pointer transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}
+                                                className={`transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}
                                             >
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{policy.code || '-'}</td>
-                                                <td className="px-6 py-4 text-sm text-gray-900 font-medium">{policy.title}</td>
+                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
+                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">{policy.title}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                                    <span className="text-njra-500 hover:text-njra-600 font-bold flex items-center justify-end">Open <i className="fas fa-chevron-right ml-2 text-xs"></i></span>
+                                                    <div className="flex justify-end gap-2">
+                                                        <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
+                                                        <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -391,78 +392,180 @@
             };
 
             const QuizComponent = ({ policy }) => {
-                const [qIndex, setQIndex] = useState(0);
-                const [score, setScore] = useState(0);
+                const [userAnswers, setUserAnswers] = useState({});
                 const [showResult, setShowResult] = useState(false);
-                const [selected, setSelected] = useState(null);
-                const [feedback, setFeedback] = useState(false);
+                const [score, setScore] = useState(0);
                 const [userName, setUserName] = useState("");
 
                 const questions = policy.questions || [];
-                if(questions.length === 0) return <div className="p-8 text-center">No questions configured.</div>;
+                
+                // If there are no questions, show message
+                if(questions.length === 0) {
+                    return (
+                        <div className="max-w-2xl mx-auto mt-8 bg-white p-8 rounded border border-gray-300 shadow-md text-center">
+                            <div className="text-gray-400 text-4xl mb-4"><i className="fas fa-clipboard-list"></i></div>
+                            <h2 className="text-xl font-bold text-gray-700">No Competency Data</h2>
+                            <p className="text-gray-500 mt-2">There are no quiz questions associated with this policy.</p>
+                            <button onClick={()=>setView('detail')} className="mt-6 njra-btn njra-btn-secondary">Return to Policy</button>
+                        </div>
+                    );
+                }
 
-                const q = questions[qIndex];
+                const handleSelect = (qIdx, optIdx) => {
+                    if (showResult) return; // Read-only after submit
+                    setUserAnswers(prev => ({...prev, [qIdx]: optIdx}));
+                };
+
+                const handleSubmit = () => {
+                    // Calculate Score
+                    let correctCount = 0;
+                    questions.forEach((q, idx) => {
+                        if (userAnswers[idx] === q.correctIndex) correctCount++;
+                    });
+                    setScore(correctCount);
+                    setShowResult(true);
+                    window.scrollTo(0, 0); // Scroll to top to see result
+                };
+
                 const isPassed = (score / questions.length) >= 0.8;
-
-                const handleAnswer = (idx) => {
-                    setSelected(idx);
-                    setFeedback(true);
-                    if(idx === q.correctIndex) setScore(s => s + 1);
-                };
-
-                const next = () => {
-                    setFeedback(false); setSelected(null);
-                    if(qIndex < questions.length - 1) setQIndex(i => i + 1);
-                    else setShowResult(true);
-                };
+                const percent = Math.round((score / questions.length) * 100);
 
                 const sendEmail = () => {
-                    const body = `Employee: ${userName}%0D%0APolicy: ${policy.title}%0D%0AScore: ${Math.round((score/questions.length)*100)}%`;
+                    const body = `Employee: ${userName}%0D%0APolicy: ${policy.title}%0D%0AScore: ${percent}%`;
                     window.open(`mailto:admin@seeNJRA.com?subject=Competency Result&body=${body}`);
                 };
 
-                if(showResult) return (
-                    <div className="max-w-xl mx-auto mt-8 bg-white p-8 rounded border border-gray-300 shadow-lg text-center">
-                        <div className={`text-6xl mb-4 ${isPassed ? 'text-green-600' : 'text-njra-500'}`}>
-                            <i className={`fas ${isPassed ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
-                        </div>
-                        <h2 className="text-2xl font-bold mb-2 text-njra-900">{isPassed ? "Competency Passed" : "Competency Not Met"}</h2>
-                        <p className="mb-6 text-gray-600">Score: {Math.round((score/questions.length)*100)}%</p>
-                        
-                        <div className="print-only border-4 border-double border-gray-800 p-8 m-4">
-                            <h1 className="text-3xl font-serif mb-4 text-njra-500">Certificate of Completion</h1>
-                            <p>This certifies that <strong>{userName}</strong> has demonstrated competency in:</p>
-                            <h3 className="text-xl font-bold my-4 text-njra-900">{policy.title}</h3>
-                            <p>{new Date().toLocaleDateString()}</p>
-                        </div>
-
-                        <div className="no-print space-y-4">
-                            <input className="border border-gray-400 p-3 w-full rounded outline-none focus:border-njra-500 bg-gray-50" placeholder="Enter Your Full Name" value={userName} onChange={e=>setUserName(e.target.value)} />
-                            <div className="flex gap-3 justify-center flex-col sm:flex-row">
-                                <button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary">Email Result</button>
-                                {isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary">Print Certificate</button>}
-                            </div>
-                            <button onClick={()=>setView('detail')} className="block w-full text-gray-500 mt-4 hover:underline">Back to Policy</button>
-                        </div>
-                    </div>
-                );
+                const handlePrint = () => {
+                    window.print();
+                }
 
                 return (
-                    <div className="max-w-2xl mx-auto mt-8 bg-white p-6 rounded border border-gray-300 shadow-md">
-                        <div className="flex justify-between mb-4 text-sm text-gray-600 font-medium">
-                            <span>Question {qIndex + 1} of {questions.length}</span>
-                            <span>Score: {score}</span>
+                    <div className="max-w-3xl mx-auto mt-8 w-full">
+                        <div className="bg-white p-8 rounded border border-gray-300 shadow-md print:shadow-none print:border-none">
+                            {/* Header / Result Section */}
+                            <div className="mb-8 border-b border-gray-200 pb-6 text-center">
+                                <h1 className="text-2xl font-bold text-njra-900 mb-2">{policy.title}</h1>
+                                <p className="text-gray-500">Competency Evaluation</p>
+                                
+                                {showResult && (
+                                    <div className={`mt-6 p-4 rounded-lg border-2 ${isPassed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}>
+                                        <div className="text-4xl mb-2"><i className={`fas ${isPassed ? 'fa-check-circle' : 'fa-times-circle'}`}></i></div>
+                                        <h2 className="text-2xl font-bold">{isPassed ? "Competency PASSED" : "Competency Not Met"}</h2>
+                                        <p className="font-bold text-lg mt-1">Score: {percent}% ({score}/{questions.length})</p>
+                                        {isPassed && <p className="text-sm mt-2">Please enter your name below to generate your certificate.</p>}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Certificate Section (Only Visible in Print if Passed) */}
+                            <div className="print-only hidden">
+                                {isPassed && (
+                                    <div className="border-4 border-double border-gray-800 p-8 m-4 text-center">
+                                        <h1 className="text-4xl font-serif mb-6 text-black">Certificate of Competency</h1>
+                                        <p className="text-lg">This certifies that</p>
+                                        <h2 className="text-2xl font-bold my-4 border-b border-black inline-block px-10 pb-1">{userName || "__________________"}</h2>
+                                        <p className="text-lg">Has successfully demonstrated knowledge and competency in:</p>
+                                        <h3 className="text-xl font-bold my-4">{policy.title}</h3>
+                                        <p className="mt-8">Date: {new Date().toLocaleDateString()}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Questions List (Single Page) */}
+                            <div className={`space-y-8 ${showResult && isPassed ? 'print:hidden' : ''}`}> {/* Hide questions on print if passed/cert mode */}
+                                {questions.map((q, idx) => {
+                                    const userAnswer = userAnswers[idx];
+                                    const isCorrect = showResult && userAnswer === q.correctIndex;
+                                    const isWrong = showResult && userAnswer !== undefined && userAnswer !== q.correctIndex;
+                                    
+                                    return (
+                                        <div key={idx} className="quiz-question-block">
+                                            <div className="flex gap-3 mb-3">
+                                                <span className="font-bold text-gray-400">{idx + 1}.</span>
+                                                <h3 className="font-bold text-gray-800 text-lg">{q.text}</h3>
+                                            </div>
+                                            
+                                            <div className="pl-8 space-y-2">
+                                                {q.options.map((opt, oIdx) => {
+                                                    let itemClass = "block w-full text-left p-3 border rounded transition-all flex items-center ";
+                                                    // Styling logic
+                                                    if (showResult) {
+                                                        if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 text-green-900 font-bold "; // Highlight Correct
+                                                        else if (oIdx === userAnswer && oIdx !== q.correctIndex) itemClass += "bg-red-50 border-red-500 text-red-900 "; // Highlight Wrong Pick
+                                                        else itemClass += "bg-gray-50 border-gray-200 opacity-60 "; // Dim others
+                                                    } else {
+                                                        if (userAnswer === oIdx) itemClass += "bg-njra-50 border-njra-500 text-njra-900 font-medium shadow-sm "; // Selected
+                                                        else itemClass += "bg-white border-gray-300 hover:bg-gray-50 text-gray-700 "; // Default
+                                                    }
+
+                                                    return (
+                                                        <button 
+                                                            key={oIdx} 
+                                                            onClick={() => handleSelect(idx, oIdx)}
+                                                            disabled={showResult}
+                                                            className={itemClass}
+                                                        >
+                                                            <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center flex-shrink-0 ${userAnswer === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>
+                                                                {userAnswer === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                                            </div>
+                                                            {opt}
+                                                            {showResult && oIdx === q.correctIndex && <i className="fas fa-check text-green-600 ml-auto"></i>}
+                                                            {showResult && userAnswer === oIdx && oIdx !== q.correctIndex && <i className="fas fa-times text-red-600 ml-auto"></i>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Footer Actions */}
+                            <div className="mt-10 pt-6 border-t border-gray-200 no-print">
+                                {!showResult ? (
+                                    <div className="flex justify-between items-center">
+                                        <div className="text-sm text-gray-500">
+                                            {Object.keys(userAnswers).length} of {questions.length} questions answered
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button onClick={handlePrint} className="njra-btn njra-btn-outline">
+                                                <i className="fas fa-print mr-2"></i> Print Quiz
+                                            </button>
+                                            <button 
+                                                onClick={handleSubmit} 
+                                                disabled={Object.keys(userAnswers).length < questions.length}
+                                                className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'njra-btn-primary'}`}
+                                            >
+                                                Submit Assessment
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 bg-gray-50 p-6 rounded-lg">
+                                        <h4 className="font-bold text-gray-900">Next Steps:</h4>
+                                        <input 
+                                            className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-njra-500 outline-none bg-white" 
+                                            placeholder="Enter Your Full Name for Record" 
+                                            value={userName} 
+                                            onChange={e=>setUserName(e.target.value)} 
+                                        />
+                                        <div className="flex gap-3 flex-col sm:flex-row">
+                                            <button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary flex-1">
+                                                <i className="fas fa-paper-plane mr-2"></i> Email Result
+                                            </button>
+                                            {isPassed && (
+                                                <button onClick={handlePrint} className="njra-btn njra-btn-secondary flex-1">
+                                                    <i className="fas fa-certificate mr-2"></i> Print Certificate
+                                                </button>
+                                            )}
+                                            <button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <h3 className="text-lg font-bold mb-6 text-njra-900">{q.text}</h3>
-                        <div className="space-y-3">
-                            {q.options.map((opt, i) => (
-                                <button key={i} disabled={feedback} onClick={()=>handleAnswer(i)} 
-                                    className={`w-full text-left p-4 border rounded transition-all font-medium ${feedback ? (i === q.correctIndex ? 'bg-green-100 border-green-500 text-green-900' : (i === selected ? 'bg-red-50 border-njra-500 text-njra-900' : 'opacity-60')) : 'bg-gray-50 hover:bg-gray-100 border-gray-300 text-gray-700'}`}>
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
-                        {feedback && <button onClick={next} className="mt-6 w-full njra-btn njra-btn-primary">Next</button>}
                     </div>
                 );
             };
@@ -522,7 +625,11 @@
 
                     <div className="w-full px-4 py-8 flex-grow">
                         {view === 'home' && (
-                            <PolicyList policies={policies} onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} />
+                            <PolicyList 
+                                policies={policies} 
+                                onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} 
+                                onTakeQuiz={(p) => { setSelectedPolicy(p); setView('quiz'); }}
+                            />
                         )}
 
                         {view === 'detail' && selectedPolicy && (
