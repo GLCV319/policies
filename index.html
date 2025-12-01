@@ -92,27 +92,26 @@
             line-height: 1.5;
             box-sizing: border-box;
             
-            /* Fluid width to fit parent container initially */
-            width: 100%; 
+            /* RESET to standard fluid width */
+            width: 100%;
             display: block;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            overflow: hidden; /* Contains scrollbars */
-            position: relative;
+            overflow: hidden;
+            
+            /* Ensure no margins push it out */
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Inner content wrapper to keep padding consistent */
+        .njra-inner-content {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
         }
 
-        /* Full Screen Override */
-        #njra-app-root.is-fullscreen {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 999999 !important;
-            border-radius: 0 !important;
-            border: none !important;
-            overflow-y: auto !important; /* Allow scrolling inside app */
-        }
+        #njra-app-root *, #njra-app-root *::before, #njra-app-root *::after { box-sizing: inherit; }
 
         /* --- BUTTON OVERRIDES --- */
         .njra-btn {
@@ -126,7 +125,6 @@
             transition: background-color 0.2s;
             border: none;
             text-decoration: none;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         
         .njra-btn-primary {
@@ -152,6 +150,14 @@
         }
         .njra-btn-outline:hover {
             background-color: #cbd5e1 !important;
+        }
+        
+        .njra-btn-danger {
+            background-color: #dc2626 !important;
+            color: white !important;
+        }
+        .njra-btn-danger:hover {
+            background-color: #b91c1c !important;
         }
 
         /* --- TYPOGRAPHY RESETS --- */
@@ -199,19 +205,6 @@
             const [status, setStatus] = useState("Connecting...");
             const [showImport, setShowImport] = useState(false);
             const [importText, setImportText] = useState("");
-            const [isFullScreen, setIsFullScreen] = useState(false);
-
-            useEffect(() => {
-                // Update container class when fullscreen toggles
-                const rootEl = document.getElementById('njra-app-root');
-                if (isFullScreen) {
-                    rootEl.classList.add('is-fullscreen');
-                    document.body.style.overflow = 'hidden'; // Stop background scrolling
-                } else {
-                    rootEl.classList.remove('is-fullscreen');
-                    document.body.style.overflow = '';
-                }
-            }, [isFullScreen]);
 
             useEffect(() => {
                 const init = async () => {
@@ -481,8 +474,8 @@
             };
 
             return (
-                <div className="flex flex-col w-full h-full">
-                    <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print w-full">
+                <div className="min-h-[600px] flex flex-col w-full njra-inner-content">
+                    <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print w-full rounded-b-lg">
                         <div className="px-4 py-4">
                             <div className="flex justify-between items-center w-full">
                                 <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
@@ -490,9 +483,6 @@
                                     <span className="text-xl font-bold text-njra-900">NJRA Portal</span>
                                 </div>
                                 <div className="flex items-center space-x-3">
-                                    <button onClick={() => setIsFullScreen(!isFullScreen)} className="njra-btn njra-btn-secondary text-xs">
-                                        <i className={`fas ${isFullScreen ? 'fa-compress' : 'fa-expand'} mr-1`}></i> {isFullScreen ? 'Exit' : 'Full Screen'}
-                                    </button>
                                     <button onClick={() => setView('home')} className={`njra-btn ${view === 'home' ? 'njra-btn-secondary' : 'njra-btn-outline'}`}>Policies</button>
                                     <button onClick={() => setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500 p-2"><i className="fas fa-lock"></i></button>
                                 </div>
@@ -530,65 +520,95 @@
                         </div>
                     )}
 
-                    <div className="w-full px-4 py-8 flex-grow bg-gray-50">
-                        <div className="max-w-7xl mx-auto w-full"> 
-                            {view === 'home' && (
-                                <PolicyList policies={policies} onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} />
-                            )}
+                    <div className="w-full px-4 py-8 flex-grow">
+                        {view === 'home' && (
+                            <PolicyList policies={policies} onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} />
+                        )}
 
-                            {view === 'detail' && selectedPolicy && (
-                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
-                                    <div className="bg-njra-900 text-white p-6 flex justify-between items-center">
-                                        <div>
-                                            <div className="text-gray-300 text-sm mb-1">{selectedPolicy.code}</div>
-                                            <h1 className="text-2xl font-bold leading-tight text-white m-0 border-0">{selectedPolicy.title}</h1>
-                                        </div>
-                                        <button onClick={()=>setView('home')} className="text-gray-300 hover:text-white ml-4 flex-shrink-0"><i className="fas fa-times text-xl"></i></button>
-                                    </div>
-                                    <div className="p-4 bg-gray-50 flex justify-end gap-3 border-b border-gray-200 no-print">
-                                        <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary"><i className="fas fa-print mr-2"></i>Print</button>
-                                        <button onClick={()=>setView('quiz')} className="njra-btn njra-btn-primary"><i className="fas fa-graduation-cap mr-2"></i>Take Quiz</button>
-                                    </div>
-                                    <div className="p-8 policy-content text-gray-800" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div>
-                                </div>
-                            )}
-
-                            {view === 'quiz' && selectedPolicy && <QuizComponent policy={selectedPolicy} />}
-                            
-                            {view === 'admin' && (
-                                <div className="bg-white p-8 rounded border border-gray-200 shadow-md">
-                                    <h2 className="text-xl font-bold mb-4 text-njra-900 text-center">Admin Dashboard</h2>
-                                    
-                                    {showImport ? (
-                                        <div className="mb-6">
-                                            <p className="mb-2 text-sm text-gray-600">Paste the JSON code below to import policies. <br/><strong>Note:</strong> Policies with existing Codes (e.g. RT-004) will be updated automatically.</p>
-                                            <textarea className="w-full border border-gray-300 p-2 h-48 font-mono text-xs rounded focus:border-njra-500 outline-none" placeholder='[{"title": "..."}]' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
-                                            <div className="flex gap-3 mt-4 justify-end">
-                                                <button onClick={()=>setShowImport(false)} className="njra-btn njra-btn-secondary">Cancel</button>
-                                                <button onClick={handleImport} className="njra-btn njra-btn-primary">Run Smart Import</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex justify-center gap-4 mb-8">
-                                            <button onClick={()=>setShowImport(true)} className="njra-btn njra-btn-primary"><i className="fas fa-file-import mr-2"></i>Import Policies</button>
-                                            <button onClick={()=>setView('home')} className="text-gray-500 underline hover:text-njra-900 pt-2">Exit Admin</button>
-                                        </div>
-                                    )}
-
+                        {view === 'detail' && selectedPolicy && (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
+                                <div className="bg-njra-900 text-white p-6 flex justify-between items-center">
                                     <div>
-                                        <h3 className="font-bold mb-4 border-b pb-2 text-njra-900">Current Database Policies ({policies.length})</h3>
-                                        <ul>
-                                            {policies.map(p => (
-                                                <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2">
-                                                    <span className="text-gray-800 font-medium">{p.title} <span className="text-xs text-gray-400 ml-2 font-normal">{p.code}</span></span>
-                                                    <button onClick={()=>handleDelete(p.id)} className="text-white bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700 font-bold">Delete</button>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                        <div className="text-gray-300 text-sm mb-1">{selectedPolicy.code}</div>
+                                        <h1 className="text-2xl font-bold leading-tight text-white m-0 border-0">{selectedPolicy.title}</h1>
                                     </div>
+                                    <button onClick={()=>setView('home')} className="text-gray-300 hover:text-white ml-4 flex-shrink-0"><i className="fas fa-times text-xl"></i></button>
                                 </div>
-                            )}
-                        </div>
+                                <div className="p-4 bg-gray-50 flex justify-end gap-3 border-b border-gray-200 no-print">
+                                    <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary"><i className="fas fa-print mr-2"></i>Print</button>
+                                    <button onClick={()=>setView('quiz')} className="njra-btn njra-btn-primary"><i className="fas fa-graduation-cap mr-2"></i>Take Quiz</button>
+                                </div>
+                                <div className="p-8 policy-content text-gray-800" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div>
+                            </div>
+                        )}
+
+                        {view === 'quiz' && selectedPolicy && <QuizComponent policy={selectedPolicy} />}
+                        
+                        {view === 'admin' && (
+                            <div className="bg-white p-8 rounded border border-gray-200 shadow-md">
+                                <div className="flex justify-between items-center mb-6 border-b pb-4">
+                                    <h2 className="text-xl font-bold text-njra-900">Admin Dashboard</h2>
+                                    <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
+                                </div>
+                                
+                                {showImport ? (
+                                    <div className="mb-6">
+                                        <p className="mb-2 text-sm text-gray-600">Paste the JSON code below to import policies. <br/><strong>Note:</strong> Policies with existing Codes (e.g. RT-004) will be updated automatically.</p>
+                                        <textarea className="w-full border border-gray-300 p-2 h-48 font-mono text-xs rounded focus:border-njra-500 outline-none" placeholder='[{"title": "..."}]' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
+                                        <div className="flex gap-3 mt-4 justify-end">
+                                            <button onClick={()=>setShowImport(false)} className="njra-btn njra-btn-secondary">Cancel</button>
+                                            <button onClick={handleImport} className="njra-btn njra-btn-primary">Run Smart Import</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-start gap-4 mb-8">
+                                        <button onClick={()=>setShowImport(true)} className="njra-btn njra-btn-primary"><i className="fas fa-file-import mr-2"></i>Import Policies</button>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <h3 className="font-bold mb-4 text-njra-900">Current Database Policies ({policies.length})</h3>
+                                    <ul>
+                                        {(() => {
+                                            // Apply same sorting as main page
+                                            const sortedPolicies = [...policies].sort((a, b) => {
+                                                const codeA = a.code || "";
+                                                const codeB = b.code || "";
+                                                return codeA.localeCompare(codeB) || a.title.localeCompare(b.title);
+                                            });
+                                            
+                                            return sortedPolicies.map(p => (
+                                                <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2">
+                                                    <span className="text-gray-800 font-medium">
+                                                        <span className="font-mono text-xs text-gray-500 mr-2 w-16 inline-block">{p.code || '-'}</span>
+                                                        {p.title}
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <button 
+                                                            onClick={() => { setSelectedPolicy(p); setView('detail'); }} 
+                                                            className="text-gray-500 hover:text-njra-500 p-2"
+                                                            title="View Policy"
+                                                        >
+                                                            <i className="fas fa-eye"></i>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setSelectedPolicy(p); setView('quiz'); }} 
+                                                            className="text-gray-500 hover:text-njra-500 p-2"
+                                                            title="View Quiz"
+                                                        >
+                                                            <i className="fas fa-graduation-cap"></i>
+                                                        </button>
+                                                        <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete Policy">
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            ));
+                                        })()}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     
                     <div className="text-center py-4 text-gray-400 text-xs mt-auto bg-white border-t border-gray-200">
