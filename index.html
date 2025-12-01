@@ -27,7 +27,6 @@
         import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
-        // --- LIVE DATABASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyAefsgDE8YT1MLwC0wTEsFB799vKbStgyk",
             authDomain: "njra-policies.firebaseapp.com",
@@ -44,8 +43,6 @@
             const app = initializeApp(firebaseConfig);
             window.db = getFirestore(app);
             window.auth = getAuth(app);
-            
-            // Expose services
             window.collection = collection;
             window.addDoc = addDoc;
             window.getDocs = getDocs;
@@ -57,7 +54,6 @@
             window.orderBy = orderBy;
             window.where = where;
             window.signInAnonymously = signInAnonymously;
-            
             console.log("Firebase Connected");
         } catch (e) {
             console.error("Firebase Init Error:", e);
@@ -71,12 +67,15 @@
             theme: {
                 extend: {
                     colors: {
-                        njra: { 
-                            50: '#fdf2f2',
-                            100: '#fde8e8',
-                            500: '#af3030',  // PRIMARY RED
-                            600: '#942626',
-                            900: '#444444'   // SECONDARY GRAY
+                        njra: { 50: '#fdf2f2', 100: '#fde8e8', 500: '#af3030', 600: '#942626', 900: '#444444' }
+                    },
+                    animation: {
+                        'slide-up': 'slideUp 0.4s ease-out forwards',
+                    },
+                    keyframes: {
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
                         }
                     }
                 }
@@ -94,8 +93,6 @@
             color: #444444;
             line-height: 1.5;
             box-sizing: border-box;
-            
-            /* RESET to standard fluid width */
             width: 100%;
             display: block;
             border: 1px solid #e5e7eb;
@@ -105,7 +102,6 @@
         
         #njra-app-root *, #njra-app-root *::before, #njra-app-root *::after { box-sizing: inherit; }
 
-        /* --- BUTTON OVERRIDES --- */
         .njra-btn {
             display: inline-flex;
             align-items: center;
@@ -114,38 +110,21 @@
             border-radius: 0.375rem;
             font-weight: 700;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
             border: none;
             text-decoration: none;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
         
-        .njra-btn-primary {
-            background-color: #af3030 !important; /* RED */
-            color: #ffffff !important;
-        }
-        .njra-btn-primary:hover {
-            background-color: #942626 !important;
-        }
+        .njra-btn-primary { background-color: #af3030 !important; color: #ffffff !important; }
+        .njra-btn-primary:hover { background-color: #942626 !important; }
 
-        .njra-btn-secondary {
-            background-color: #444444 !important; /* DARK GRAY */
-            color: #ffffff !important;
-        }
-        .njra-btn-secondary:hover {
-            background-color: #000000 !important;
-        }
+        .njra-btn-secondary { background-color: #444444 !important; color: #ffffff !important; }
+        .njra-btn-secondary:hover { background-color: #000000 !important; }
 
-        .njra-btn-outline {
-            background-color: #e2e8f0 !important; /* LIGHT GRAY */
-            color: #444444 !important;
-            border: 1px solid #94a3b8 !important;
-        }
-        .njra-btn-outline:hover {
-            background-color: #cbd5e1 !important;
-        }
+        .njra-btn-outline { background-color: #e2e8f0 !important; color: #444444 !important; border: 1px solid #94a3b8 !important; }
+        .njra-btn-outline:hover { background-color: #cbd5e1 !important; }
 
-        /* --- TYPOGRAPHY RESETS --- */
         #njra-app-root h1 { font-size: 2em; font-weight: 700; margin-bottom: 0.5em; line-height: 1.2; margin-top: 0; color: #af3030; }
         #njra-app-root h2 { font-size: 1.5em; font-weight: 600; margin-bottom: 0.5em; line-height: 1.3; margin-top: 1em; color: #444444; }
         #njra-app-root h3 { font-size: 1.17em; font-weight: 600; margin-bottom: 0.5em; color: #444444; }
@@ -153,7 +132,7 @@
         #njra-app-root ul, #njra-app-root ol { margin-bottom: 1em; padding-left: 1.5em; margin-top: 0; }
         #njra-app-root ul { list-style-type: disc; }
         #njra-app-root ol { list-style-type: decimal; }
-        #njra-app-root input, #njra-app-root textarea, #njra-app-root select { color: #333; }
+        #njra-app-root input, #njra-app-root textarea { color: #333; }
         
         .policy-content h1 { color: #af3030; border-bottom: 2px solid #fbd5d5; padding-bottom: 0.2em; margin-top: 1.5em; }
         .policy-content h2 { color: #444444; margin-top: 1.5em; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
@@ -165,6 +144,7 @@
             body { background: white; color: black; }
             #njra-app-root { border: none; width: 100% !important; margin: 0 !important; }
             .quiz-question-block { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+            .print-page-break { page-break-before: always; }
         }
         .print-only { display: none; }
     </style>
@@ -181,14 +161,9 @@
         const { useState, useEffect } = React;
 
         const CATEGORIES = [
-            "Emergency Procedures",
-            "Clinical Care", 
-            "Equipment Management",
-            "Patient Assessment",
-            "Infection Control",
-            "Documentation",
-            "Administrative",
-            "Uncategorized"
+            "Emergency Procedures", "Clinical Care", "Equipment Management",
+            "Patient Assessment", "Infection Control", "Documentation",
+            "Administrative", "Uncategorized"
         ];
 
         const App = () => {
@@ -199,14 +174,15 @@
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [adminPass, setAdminPass] = useState("");
             const [status, setStatus] = useState("Connecting...");
-            const [showImport, setShowImport] = useState(false);
-            const [importText, setImportText] = useState("");
+            const [selectedForPrint, setSelectedForPrint] = useState(new Set()); // New State for printing
             
-            // AI / Document State
+            // AI
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
             const [uploadQueue, setUploadQueue] = useState([]); 
-            const [processedData, setProcessedData] = useState([]); 
+            const [processedData, setProcessedData] = useState([]);
+            const [showImport, setShowImport] = useState(false);
+            const [importText, setImportText] = useState("");
 
             useEffect(() => {
                 const init = async () => {
@@ -226,53 +202,52 @@
                 
                 const params = new URLSearchParams(window.location.search);
                 const codeParam = params.get('code');
-                const path = window.location.pathname.toLowerCase();
                 init();
             }, []);
 
-            // --- AI DOC HANDLER ---
+            // --- SELECTION HANDLER ---
+            const togglePrintSelection = (policyId) => {
+                const newSet = new Set(selectedForPrint);
+                if (newSet.has(policyId)) newSet.delete(policyId);
+                else newSet.add(policyId);
+                setSelectedForPrint(newSet);
+            };
+
+            const handleBatchPrint = () => {
+                setView('batch_print');
+            };
+
+            // --- AI & IMPORT LOGIC (Same as before) ---
             const handleApiKeyChange = (e) => {
                 const key = e.target.value.trim();
                 setApiKey(key);
                 localStorage.setItem('njra_openai_key', key);
             };
-
             const resetApiKey = () => {
                 setApiKey("");
                 localStorage.removeItem('njra_openai_key');
-                alert("API Key cleared. Please paste a new one.");
+                alert("API Key cleared.");
             };
-
             const handleFileSelect = (e) => {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
                 setUploadQueue(prev => [...prev, ...files]);
             };
-
-            const removeFile = (idx) => {
-                setUploadQueue(prev => prev.filter((_, i) => i !== idx));
-            };
-
+            const removeFile = (idx) => { setUploadQueue(prev => prev.filter((_, i) => i !== idx)); };
             const processFiles = async () => {
                 if (!apiKey) { alert("Please enter an OpenAI API Key first."); return; }
                 if (uploadQueue.length === 0) return;
-
                 setIsProcessing(true);
                 let combinedJson = [];
-
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
                     setStatus(`Processing ${i+1}/${uploadQueue.length}: ${file.name}...`);
-
                     try {
                         const arrayBuffer = await file.arrayBuffer();
                         const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
                         const rawText = result.value;
-
                         const prompt = `
-                            You are a medical policy assistant. 
-                            I will give you the raw text of a respiratory therapy policy.
-                            
+                            You are a medical policy assistant. I will give you the raw text of a respiratory therapy policy.
                             You must return a VALID JSON array containing exactly one object with this structure:
                             [
                                 {
@@ -290,63 +265,32 @@
                                     ]
                                 }
                             ]
-
                             Here is the raw text:
                             ${rawText}
                         `;
-
                         const response = await fetch("https://api.openai.com/v1/chat/completions", {
                             method: "POST",
                             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-                            body: JSON.stringify({
-                                model: "gpt-4o",
-                                messages: [{ role: "user", content: prompt }],
-                                response_format: { type: "json_object" }
-                            })
+                            body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } })
                         });
-
-                        if (!response.ok) {
-                            const errData = await response.json();
-                            throw new Error(`OpenAI Error: ${errData.error?.message || response.statusText}`);
-                        }
-
+                        if (!response.ok) { const errData = await response.json(); throw new Error(`OpenAI Error: ${errData.error?.message || response.statusText}`); }
                         const data = await response.json();
                         let content = data.choices[0].message.content;
                         let jsonObject = JSON.parse(content);
-                        
                         if (jsonObject.policies) combinedJson.push(...jsonObject.policies);
                         else if (Array.isArray(jsonObject)) combinedJson.push(...jsonObject);
                         else combinedJson.push(jsonObject);
-
-                    } catch (err) {
-                        console.error(err);
-                        alert(`Error processing ${file.name}: ${err.message}`);
-                    }
+                    } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
                 }
-
                 setProcessedData(combinedJson);
                 setStatus("");
                 setIsProcessing(false);
                 setUploadQueue([]); 
             };
-
-            const handleCategoryChange = (idx, newCat) => {
-                const newData = [...processedData];
-                newData[idx].category = newCat;
-                setProcessedData(newData);
-            };
-
-            const updateDbCategory = async (id, newCat) => {
-                try {
-                    await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat });
-                } catch(e) {
-                    alert("Update failed: " + e.message);
-                }
-            };
-
+            const handleCategoryChange = (idx, newCat) => { const newData = [...processedData]; newData[idx].category = newCat; setProcessedData(newData); };
+            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); } catch(e) { alert("Update failed: " + e.message); } };
             const saveToDatabase = async () => {
                 if(!confirm(`Saving ${processedData.length} policies to Live Database... Continue?`)) return;
-                
                 setStatus("Saving to Database...");
                 let addedCount = 0;
                 let updatedCount = 0;
@@ -365,18 +309,18 @@
                 alert(`Success!\n\nNew Policies: ${addedCount}\nUpdated Policies: ${updatedCount}`);
                 setProcessedData([]); 
             };
-
             const handleDelete = async (id) => {
                 if(!confirm("Delete this policy permanently?")) return;
                 try { await window.deleteDoc(window.doc(window.db, 'policies', id)); } 
                 catch(e) { alert("Delete failed: " + e.message); }
             };
 
+            // --- COMPONENTS ---
+
             const PolicyList = ({ policies, onSelectPolicy, onTakeQuiz }) => {
                 const [searchTerm, setSearchTerm] = useState("");
                 const [viewMode, setViewMode] = useState('list'); 
 
-                // Group by Category
                 const groupedPolicies = policies.reduce((acc, policy) => {
                     const cat = policy.category || "Uncategorized";
                     if (!acc[cat]) acc[cat] = [];
@@ -384,17 +328,16 @@
                     return acc;
                 }, {});
 
-                // Filter logic
                 const filteredPolicies = policies.filter(p => 
                     p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
                 );
 
-                // If searching, just show flat list. If not, show grouped.
                 const showGrouped = searchTerm === "";
 
                 return (
-                    <div className="w-full">
+                    <div className="w-full animate-slide-up">
+                        {/* Search Hero */}
                         <div className="text-center mb-8 bg-white p-8 rounded-lg shadow-sm border border-gray-200">
                             <h1 className="text-3xl font-bold text-njra-500 mb-2">Policy Database</h1>
                             <p className="text-gray-500 mb-6">Search respiratory therapy protocols and competencies.</p>
@@ -404,10 +347,16 @@
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-4 px-1">
+                        {/* Controls */}
+                        <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2">
                             <h2 className="text-lg font-bold text-gray-700 flex items-center">
-                                Table of Contents 
-                                <span className="ml-3 text-xs font-normal text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{filteredPolicies.length} Documents</span>
+                                {selectedForPrint.size > 0 ? (
+                                    <button onClick={handleBatchPrint} className="njra-btn njra-btn-primary animate-bounce">
+                                        <i className="fas fa-print mr-2"></i> Print ({selectedForPrint.size}) Selected
+                                    </button>
+                                ) : (
+                                    <span>Table of Contents</span>
+                                )}
                             </h2>
                             <div className="flex bg-white p-1 rounded-md border border-gray-300 shadow-sm">
                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded text-sm font-medium flex items-center transition-all ${viewMode === 'list' ? 'bg-njra-50 text-njra-500' : 'text-gray-400 hover:text-gray-600'}`}><i className="fas fa-list"></i></button>
@@ -415,82 +364,78 @@
                             </div>
                         </div>
 
+                        {/* List Content */}
                         {showGrouped ? (
                             Object.keys(groupedPolicies).sort().map(cat => (
                                 <div key={cat} className="mb-8">
                                     <h3 className="text-xl font-bold text-njra-900 mb-3 border-b border-gray-200 pb-1">{cat}</h3>
-                                    {viewMode === 'grid' ? (
-                                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
-                                            {groupedPolicies[cat].map(p => (
-                                                <div key={p.id} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
-                                                    <div onClick={() => onSelectPolicy(p)} className="cursor-pointer group">
-                                                        <div className="flex items-center mb-4">
-                                                            <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
-                                                            <div className="ml-4 overflow-hidden">
-                                                                <div className="text-xs text-gray-500 font-mono">{p.code}</div>
-                                                                <div className="font-bold text-njra-900 truncate">{p.title}</div>
-                                                                <div className="mt-1"><span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{p.category || "Uncategorized"}</span></div>
+                                    <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50"><tr><th className="w-12 px-6 py-3"></th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th></tr></thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {groupedPolicies[cat].map((policy, idx) => (
+                                                    <tr key={policy.id} className={`transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <input type="checkbox" className="w-4 h-4 text-njra-500 rounded border-gray-300 focus:ring-njra-500 cursor-pointer" 
+                                                                checked={selectedForPrint.has(policy.id)} 
+                                                                onChange={() => togglePrintSelection(policy.id)} 
+                                                            />
+                                                        </td>
+                                                        <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
+                                                        <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">{policy.title}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                                            <div className="flex justify-end gap-2">
+                                                                <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
+                                                                <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-between items-center mt-2 pt-4 border-t border-gray-100">
-                                                        <button onClick={() => onSelectPolicy(p)} className="text-njra-500 text-sm font-bold hover:underline">View Policy</button>
-                                                        <button onClick={() => onTakeQuiz(p)} className="njra-btn njra-btn-secondary text-xs py-1 px-2"><i className="fas fa-graduation-cap mr-1"></i> Competency</button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
-                                            <table className="min-w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th></tr></thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {groupedPolicies[cat].map((policy, idx) => (
-                                                        <tr key={policy.id} className={`transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}>
-                                                            <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
-                                                            <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">
-                                                                {policy.title}
-                                                                <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{policy.category || "Uncategorized"}</span>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                                                <div className="flex justify-end gap-2">
-                                                                    <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
-                                                                    <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             ))
                         ) : (
                             <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
                                 <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Actions</th></tr></thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {filteredPolicies.map((policy, idx) => (
-                                            <tr key={policy.id} className={`transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}>
-                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
-                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">
-                                                    {policy.title}
-                                                    <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{policy.category || "Uncategorized"}</span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
-                                                        <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
-                                                    </div>
-                                                </td>
+                                        {filteredPolicies.map((policy) => (
+                                            <tr key={policy.id} className="hover:bg-njra-50">
+                                                <td className="px-6 py-4 text-center w-12"><input type="checkbox" className="w-4 h-4" checked={selectedForPrint.has(policy.id)} onChange={() => togglePrintSelection(policy.id)} /></td>
+                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 font-mono text-gray-500 w-24 cursor-pointer">{policy.code}</td>
+                                                <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 font-medium text-gray-900 cursor-pointer">{policy.title}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
                         )}
-                        {filteredPolicies.length === 0 && (<div className="text-center py-12 bg-white rounded-lg border border-gray-200 border-dashed"><i className="fas fa-search text-4xl text-gray-300 mb-4"></i><p className="text-gray-500 text-lg">No policies found matching your search.</p><button onClick={() => setSearchTerm('')} className="mt-4 text-njra-500 hover:underline font-bold">Clear Search</button></div>)}
+                    </div>
+                );
+            };
+
+            const BatchPrintView = () => {
+                const selectedList = policies.filter(p => selectedForPrint.has(p.id));
+                return (
+                    <div className="max-w-4xl mx-auto w-full bg-white p-12 min-h-screen">
+                        <div className="no-print flex justify-between mb-8 pb-4 border-b">
+                            <h2 className="text-2xl font-bold">Print Preview ({selectedList.length} Items)</h2>
+                            <div className="flex gap-2">
+                                <button onClick={() => window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-print mr-2"></i> Print All</button>
+                                <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary">Back</button>
+                            </div>
+                        </div>
+                        {selectedList.map((policy, idx) => (
+                            <div key={policy.id} className="print-page-break mb-12 border-b border-gray-200 pb-8 last:border-0">
+                                <h1 className="text-3xl font-bold text-black mb-2">{policy.title}</h1>
+                                <div className="text-sm text-gray-500 mb-6 flex gap-4">
+                                    <span>Code: <strong>{policy.code}</strong></span>
+                                    <span>Category: <strong>{policy.category}</strong></span>
+                                </div>
+                                <div className="policy-content" dangerouslySetInnerHTML={{__html: policy.content}}></div>
+                            </div>
+                        ))}
                     </div>
                 );
             };
@@ -502,9 +447,7 @@
                 const [userName, setUserName] = useState("");
                 const questions = policy.questions || [];
                 
-                if(questions.length === 0) {
-                    return (<div className="max-w-2xl mx-auto mt-8 bg-white p-8 rounded border border-gray-300 shadow-md text-center"><div className="text-gray-400 text-4xl mb-4"><i className="fas fa-clipboard-list"></i></div><h2 className="text-xl font-bold text-gray-700">No Competency Data</h2><p className="text-gray-500 mt-2">There are no quiz questions associated with this policy.</p><button onClick={()=>setView('detail')} className="mt-6 njra-btn njra-btn-secondary">Return to Policy</button></div>);
-                }
+                if(questions.length === 0) return (<div className="max-w-2xl mx-auto mt-8 bg-white p-8 rounded border border-gray-300 shadow-md text-center"><div className="text-gray-400 text-4xl mb-4"><i className="fas fa-clipboard-list"></i></div><h2 className="text-xl font-bold text-gray-700">No Competency Data</h2><button onClick={()=>setView('detail')} className="mt-6 njra-btn njra-btn-secondary">Return</button></div>);
 
                 const handleSelect = (qIdx, optIdx) => { if (showResult) return; setUserAnswers(prev => ({...prev, [qIdx]: optIdx})); };
                 const handleSubmit = () => {
@@ -518,37 +461,33 @@
                     const body = `Employee: ${userName}%0D%0APolicy: ${policy.title}%0D%0AScore: ${percent}%`;
                     window.open(`mailto:admin@seeNJRA.com?subject=Competency Result&body=${body}`);
                 };
-                const handlePrint = () => { window.print(); }
 
                 return (
-                    <div className="max-w-3xl mx-auto mt-8 w-full">
-                        <div className="bg-white p-8 rounded border border-gray-300 shadow-md print:shadow-none print:border-none">
+                    <div className="max-w-3xl mx-auto mt-8 w-full animate-slide-up">
+                        <div className="bg-white p-8 rounded border border-gray-300 shadow-md">
                             <div className="mb-8 border-b border-gray-200 pb-6 text-center">
                                 <h1 className="text-2xl font-bold text-njra-900 mb-2">{policy.title}</h1>
                                 <p className="text-gray-500">Competency Evaluation</p>
-                                {showResult && (<div className={`mt-6 p-4 rounded-lg border-2 ${isPassed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}><div className="text-4xl mb-2"><i className={`fas ${isPassed ? 'fa-check-circle' : 'fa-times-circle'}`}></i></div><h2 className="text-2xl font-bold">{isPassed ? "Competency PASSED" : "Competency Not Met"}</h2><p className="font-bold text-lg mt-1">Score: {percent}% ({score}/{questions.length})</p>{isPassed && <p className="text-sm mt-2">Please enter your name below to generate your certificate.</p>}</div>)}
+                                {showResult && (<div className={`mt-6 p-4 rounded-lg border-2 ${isPassed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}><h2 className="text-2xl font-bold">{isPassed ? "PASSED" : "Not Met"}</h2><p className="font-bold text-lg">{percent}%</p></div>)}
                             </div>
-                            <div className="print-only hidden">{isPassed && (<div className="border-4 border-double border-gray-800 p-8 m-4 text-center"><h1 className="text-4xl font-serif mb-6 text-black">Certificate of Competency</h1><p className="text-lg">This certifies that</p><h2 className="text-2xl font-bold my-4 border-b border-black inline-block px-10 pb-1">{userName || "__________________"}</h2><p className="text-lg">Has successfully demonstrated knowledge and competency in:</p><h3 className="text-xl font-bold my-4">{policy.title}</h3><p className="mt-8">Date: {new Date().toLocaleDateString()}</p></div>)}</div>
+                            <div className="print-only hidden">{isPassed && (<div className="border-4 border-double border-black p-8 m-4 text-center"><h1 className="text-4xl font-serif mb-6">Certificate of Competency</h1><p className="text-lg">Certifies that <strong>{userName}</strong> passed:</p><h3 className="text-xl font-bold my-4">{policy.title}</h3><p>Date: {new Date().toLocaleDateString()}</p></div>)}</div>
                             <div className={`space-y-8 ${showResult && isPassed ? 'print:hidden' : ''}`}>
-                                {questions.map((q, idx) => {
-                                    const userAnswer = userAnswers[idx];
-                                    return (
-                                        <div key={idx} className="quiz-question-block"><div className="flex gap-3 mb-3"><span className="font-bold text-gray-400">{idx + 1}.</span><h3 className="font-bold text-gray-800 text-lg">{q.text}</h3></div><div className="pl-8 space-y-2">{q.options.map((opt, oIdx) => {
-                                            let itemClass = "block w-full text-left p-3 border rounded transition-all flex items-center ";
-                                            if (showResult) {
-                                                if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 text-green-900 font-bold ";
-                                                else if (oIdx === userAnswer && oIdx !== q.correctIndex) itemClass += "bg-red-50 border-red-500 text-red-900 ";
-                                                else itemClass += "bg-gray-50 border-gray-200 opacity-60 ";
-                                            } else {
-                                                if (userAnswer === oIdx) itemClass += "bg-njra-50 border-njra-500 text-njra-900 font-medium shadow-sm ";
-                                                else itemClass += "bg-white border-gray-300 hover:bg-gray-50 text-gray-700 ";
-                                            }
-                                            return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center flex-shrink-0 ${userAnswer === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswer === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}{showResult && oIdx === q.correctIndex && <i className="fas fa-check text-green-600 ml-auto"></i>}{showResult && userAnswer === oIdx && oIdx !== q.correctIndex && <i className="fas fa-times text-red-600 ml-auto"></i>}</button>);
-                                        })}</div></div>
-                                    );
-                                })}
+                                {questions.map((q, idx) => (
+                                    <div key={idx} className="quiz-question-block"><div className="flex gap-3 mb-3"><span className="font-bold text-gray-400">{idx + 1}.</span><h3 className="font-bold text-gray-800 text-lg">{q.text}</h3></div><div className="pl-8 space-y-2">{q.options.map((opt, oIdx) => {
+                                        let itemClass = "block w-full text-left p-3 border rounded transition-all flex items-center ";
+                                        if (showResult) {
+                                            if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 font-bold ";
+                                            else if (oIdx === userAnswers[idx]) itemClass += "bg-red-50 border-red-500 ";
+                                            else itemClass += "bg-gray-50 opacity-60 ";
+                                        } else {
+                                            if (userAnswers[idx] === oIdx) itemClass += "bg-njra-50 border-njra-500 font-medium ";
+                                            else itemClass += "bg-white border-gray-300 hover:bg-gray-50 ";
+                                        }
+                                        return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${userAnswers[idx] === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswers[idx] === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}</button>);
+                                    })}</div></div>
+                                ))}
                             </div>
-                            <div className="mt-10 pt-6 border-t border-gray-200 no-print">{!showResult ? (<div className="flex justify-between items-center"><div className="text-sm text-gray-500">{Object.keys(userAnswers).length} of {questions.length} questions answered</div><div className="flex gap-3"><button onClick={handlePrint} className="njra-btn njra-btn-outline"><i className="fas fa-print mr-2"></i> Print Quiz</button><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'njra-btn-primary'}`}>Submit Assessment</button></div></div>) : (<div className="space-y-4 bg-gray-50 p-6 rounded-lg"><h4 className="font-bold text-gray-900">Next Steps:</h4><input className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-njra-500 outline-none bg-white" placeholder="Enter Your Full Name for Record" value={userName} onChange={e=>setUserName(e.target.value)} /><div className="flex gap-3 flex-col sm:flex-row"><button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary flex-1"><i className="fas fa-paper-plane mr-2"></i> Email Result</button>{isPassed && (<button onClick={handlePrint} className="njra-btn njra-btn-secondary flex-1"><i className="fas fa-certificate mr-2"></i> Print Certificate</button>)}<button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button></div></div>)}</div>
+                            <div className="mt-10 pt-6 border-t border-gray-200 no-print">{!showResult ? (<div className="flex justify-between items-center"><div className="text-sm text-gray-500">{Object.keys(userAnswers).length} / {questions.length} answered</div><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed' : 'njra-btn-primary'}`}>Submit</button></div>) : (<div className="space-y-4 bg-gray-50 p-6 rounded-lg"><input className="border border-gray-300 p-3 w-full rounded" placeholder="Enter Name" value={userName} onChange={e=>setUserName(e.target.value)} /><div className="flex gap-3"><button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary flex-1">Email Result</button>{isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary flex-1">Print Certificate</button>}<button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button></div></div>)}</div>
                         </div>
                     </div>
                 );
@@ -579,34 +518,6 @@
                     
                     {status && <div className="bg-yellow-50 text-yellow-800 text-center text-xs py-2 border-b border-yellow-200">{status}</div>}
 
-                    {!status && policies.length === 0 && view !== 'admin' && (
-                        <div className="flex flex-col items-center justify-center p-12 text-center">
-                            <div className="bg-white p-8 rounded-lg border border-gray-300 shadow-md max-w-lg">
-                                <div className="text-njra-500 text-4xl mb-4"><i className="fas fa-database"></i></div>
-                                <h2 className="text-xl font-bold mb-2 text-njra-900">Database Connected!</h2>
-                                <p className="text-gray-600 mb-6">Your app is live, but the policy database is currently empty.</p>
-                                <button onClick={() => { setShowAdminLogin(true); }} className="njra-btn njra-btn-primary">
-                                    Go to Admin Dashboard to Import Data
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {showAdminLogin && (
-                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm border border-gray-200">
-                                <h3 className="font-bold mb-6 text-xl text-njra-900 text-center">Admin Access</h3>
-                                <form onSubmit={handleAdminLogin}>
-                                    <input type="password" placeholder="Code (NJRA2025)" className="w-full border border-gray-300 p-3 mb-6 rounded outline-none focus:border-njra-500 bg-gray-50" value={adminPass} onChange={e=>setAdminPass(e.target.value)}/>
-                                    <div className="flex justify-between gap-4">
-                                        <button type="button" onClick={()=>setShowAdminLogin(false)} className="njra-btn njra-btn-secondary flex-1">Cancel</button>
-                                        <button type="submit" className="njra-btn njra-btn-primary flex-1">Login</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="w-full px-4 py-8 flex-grow">
                         {view === 'home' && (
                             <PolicyList 
@@ -616,164 +527,123 @@
                             />
                         )}
 
+                        {view === 'batch_print' && <BatchPrintView />}
+
                         {view === 'detail' && selectedPolicy && (
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
-                                <div className="bg-njra-900 text-white p-6 flex justify-between items-center">
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full animate-slide-up">
+                                {/* Cleaner Header: White background, Red Title */}
+                                <div className="bg-white p-8 border-b border-gray-200 flex justify-between items-start">
                                     <div>
-                                        <div className="text-gray-300 text-sm mb-1">{selectedPolicy.code}</div>
-                                        <h1 className="text-2xl font-bold leading-tight text-white m-0 border-0">{selectedPolicy.title}</h1>
-                                        <span className="text-xs bg-white text-njra-900 px-2 py-0.5 rounded mt-1 inline-block bg-opacity-90">{selectedPolicy.category || "Uncategorized"}</span>
+                                        <div className="text-gray-400 text-sm mb-1 uppercase tracking-wide font-bold">{selectedPolicy.code}</div>
+                                        <h1 className="text-3xl font-bold text-njra-500 m-0 border-0">{selectedPolicy.title}</h1>
+                                        <div className="mt-2 text-sm text-gray-500 bg-gray-100 inline-block px-2 py-1 rounded">{selectedPolicy.category || "Uncategorized"}</div>
                                     </div>
-                                    <button onClick={()=>setView('home')} className="text-gray-300 hover:text-white ml-4 flex-shrink-0"><i className="fas fa-times text-xl"></i></button>
+                                    <button onClick={()=>setView('home')} className="text-gray-400 hover:text-njra-500 transition-colors"><i className="fas fa-times text-2xl"></i></button>
                                 </div>
                                 <div className="p-4 bg-gray-50 flex justify-end gap-3 border-b border-gray-200 no-print">
                                     <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary"><i className="fas fa-print mr-2"></i>Print</button>
                                     <button onClick={()=>setView('quiz')} className="njra-btn njra-btn-primary"><i className="fas fa-graduation-cap mr-2"></i>Take Quiz</button>
                                 </div>
-                                <div className="p-8 policy-content text-gray-800" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div>
+                                <div className="p-12 policy-content text-gray-800 leading-relaxed" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div>
                             </div>
                         )}
 
                         {view === 'quiz' && selectedPolicy && <QuizComponent policy={selectedPolicy} />}
                         
                         {view === 'admin' && (
-                            <div className="bg-white p-8 rounded border border-gray-200 shadow-md">
+                            <div className="bg-white p-8 rounded border border-gray-200 shadow-md animate-slide-up">
                                 <div className="flex justify-between items-center mb-6 border-b pb-4">
                                     <h2 className="text-xl font-bold text-njra-900">Admin Dashboard</h2>
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
                                 </div>
                                 
-                                <div className="flex flex-col gap-6 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                                    <div className="flex items-start gap-4 flex-col md:flex-row">
-                                        <div className="flex-grow w-full">
-                                            <h3 className="font-bold text-lg text-njra-900 mb-2">Magic Upload (AI)</h3>
-                                            <p className="text-sm text-gray-600 mb-4">Select Word documents (.docx) to automatically extract content, format policy text, and generate 5 quiz questions. You can upload multiple files.</p>
-                                            
-                                            <div className="flex gap-2 items-center mb-4">
-                                                <input type="password" placeholder="Paste OpenAI Key" className="border border-gray-300 p-2 rounded text-sm w-64" value={apiKey} onChange={handleApiKeyChange} />
-                                                {apiKey && <button onClick={resetApiKey} className="text-red-500 text-xs hover:underline">Reset Key</button>}
-                                            </div>
+                                {showImport ? (
+                                    <div className="mb-6">
+                                        <p className="mb-2 text-sm text-gray-600">Review AI Output. Edit categories if needed before saving.</p>
+                                        
+                                        <div className="bg-gray-50 p-4 rounded border border-gray-200 max-h-96 overflow-y-auto mb-4">
+                                            {processedData.map((item, idx) => (
+                                                <div key={idx} className="bg-white p-3 mb-2 rounded border flex flex-col md:flex-row gap-4 items-start">
+                                                    <div className="flex-grow">
+                                                        <div className="font-bold">{item.title}</div>
+                                                        <div className="text-xs text-gray-500">{item.code}</div>
+                                                    </div>
+                                                    <select 
+                                                        className="border border-gray-300 p-1 rounded text-sm w-48"
+                                                        value={item.category || ""} 
+                                                        onChange={(e) => handleCategoryChange(idx, e.target.value)}
+                                                    >
+                                                        <option value="">Select Category...</option>
+                                                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
 
-                                            <label className={`njra-btn njra-btn-secondary cursor-pointer ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        <div className="flex gap-3 justify-end">
+                                            <button onClick={() => { setShowImport(false); setProcessedData([]); }} className="njra-btn njra-btn-secondary">Discard</button>
+                                            <button onClick={saveToDatabase} className="njra-btn njra-btn-primary">Save to Database</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-start gap-4 mb-8">
+                                        <div className="border border-gray-300 p-4 rounded flex items-center gap-4 bg-gray-50 w-full md:w-auto">
+                                            <div className="text-xs text-gray-500 flex flex-col">
+                                                <span className="font-bold text-gray-700">Magic Upload (AI)</span>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <input type="password" placeholder="OpenAI Key" className="border p-1 rounded w-24 text-xs" value={apiKey} onChange={handleApiKeyChange} />
+                                                    {apiKey && <button onClick={resetApiKey} className="text-red-500 hover:text-red-700"><i className="fas fa-times"></i></button>}
+                                                </div>
+                                            </div>
+                                            <label className={`njra-btn njra-btn-secondary cursor-pointer text-sm ${isProcessing ? 'opacity-50' : ''}`}>
                                                 {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-magic mr-2"></i>}
-                                                <span>{isProcessing ? 'Processing Documents...' : 'Select Word Documents'}</span>
+                                                <span>{isProcessing ? 'Processing...' : 'Upload Word Docs'}</span>
                                                 <input type="file" accept=".docx" multiple className="hidden" onChange={handleFileSelect} disabled={isProcessing} />
                                             </label>
                                         </div>
                                     </div>
-
-                                    {/* Upload Queue Section */}
-                                    {uploadQueue.length > 0 && !isProcessing && (
-                                        <div className="border-t border-gray-200 pt-6">
-                                            <h4 className="font-bold text-gray-800 mb-2">Selected Documents ({uploadQueue.length})</h4>
-                                            <ul className="mb-4 space-y-2">
-                                                {uploadQueue.map((file, idx) => (
-                                                    <li key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-gray-200">
-                                                        <span>{file.name}</span>
-                                                        <button onClick={() => removeFile(idx)} className="text-red-500 hover:text-red-700"><i className="fas fa-trash"></i></button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                            <div className="flex gap-3">
-                                                <button onClick={() => setUploadQueue([])} className="njra-btn njra-btn-secondary">Clear All</button>
-                                                <button onClick={processFiles} className="njra-btn njra-btn-primary">Process Files (AI)</button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Review Processed Data Section */}
-                                    {processedData.length > 0 && (
-                                        <div className="border-t border-gray-200 pt-6">
-                                            <h4 className="font-bold text-gray-800 mb-2">Review Processed Policies ({processedData.length})</h4>
-                                            <p className="text-sm text-gray-500 mb-4">Edit categories if needed before saving.</p>
-                                            
-                                            <div className="space-y-3 mb-6">
-                                                {processedData.map((item, idx) => (
-                                                    <div key={idx} className="bg-white p-3 rounded border border-gray-200 flex flex-col md:flex-row gap-3 items-start md:items-center">
-                                                        <div className="flex-grow">
-                                                            <div className="font-bold text-sm">{item.title}</div>
-                                                            <div className="text-xs text-gray-500">{item.code}</div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 w-full md:w-auto">
-                                                            <label className="text-xs text-gray-500 font-bold">Category:</label>
-                                                            <select 
-                                                                className="border border-gray-300 p-1 rounded text-sm flex-grow bg-white" 
-                                                                value={item.category || ""} 
-                                                                onChange={(e) => handleCategoryChange(idx, e.target.value)}
-                                                            >
-                                                                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            
-                                            <div className="flex gap-3 justify-end">
-                                                <button onClick={() => setProcessedData([])} className="njra-btn njra-btn-secondary">Discard</button>
-                                                <button onClick={saveToDatabase} className="njra-btn njra-btn-primary">Save All to Database</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
 
                                 <div>
-                                    <h3 className="font-bold mb-4 text-njra-900">Current Database Policies ({policies.length})</h3>
+                                    <h3 className="font-bold mb-4 text-njra-900 border-b pb-2">Database Content ({policies.length})</h3>
                                     <ul>
-                                        {(() => {
-                                            const sortedPolicies = [...policies].sort((a, b) => {
-                                                const codeA = a.code || "";
-                                                const codeB = b.code || "";
-                                                return codeA.localeCompare(codeB) || a.title.localeCompare(b.title);
-                                            });
-                                            
-                                            return sortedPolicies.map(p => (
-                                                <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2 flex-wrap gap-2">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-gray-800 font-medium">
-                                                            <span className="font-mono text-xs text-gray-500 mr-2 w-16 inline-block">{p.code || '-'}</span>
-                                                            {p.title}
-                                                        </span>
-                                                        <span className="text-xs text-gray-400 mt-1">Category: {p.category || 'Uncategorized'}</span>
-                                                    </div>
-                                                    
-                                                    <div className="flex items-center gap-2 ml-auto">
-                                                        <select 
-                                                            className="text-xs border rounded p-1 max-w-[120px]"
-                                                            value={p.category || "Uncategorized"}
-                                                            onChange={(e) => updateDbCategory(p.id, e.target.value)}
-                                                        >
-                                                            {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                                        </select>
-                                                        <button 
-                                                            onClick={() => { setSelectedPolicy(p); setView('detail'); }} 
-                                                            className="text-gray-500 hover:text-njra-500 p-2"
-                                                            title="View Policy"
-                                                        >
-                                                            <i className="fas fa-eye"></i>
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => { setSelectedPolicy(p); setView('quiz'); }} 
-                                                            className="text-gray-500 hover:text-njra-500 p-2"
-                                                            title="View Quiz"
-                                                        >
-                                                            <i className="fas fa-graduation-cap"></i>
-                                                        </button>
-                                                        <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete Policy">
-                                                            <i className="fas fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            ));
-                                        })()}
+                                        {policies.sort((a,b) => (a.code||"").localeCompare(b.code||"")).map(p => (
+                                            <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2 flex-wrap gap-2">
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-800 font-medium">
+                                                        <span className="font-mono text-xs text-gray-500 mr-2 w-16 inline-block">{p.code || '-'}</span>
+                                                        {p.title}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-auto">
+                                                    <select 
+                                                        className="text-xs border rounded p-1 max-w-[140px] bg-white"
+                                                        value={p.category || "Uncategorized"}
+                                                        onChange={(e) => updateDbCategory(p.id, e.target.value)}
+                                                    >
+                                                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                    </select>
+                                                    <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete"><i className="fas fa-trash"></i></button>
+                                                </div>
+                                            </li>
+                                        ))}
                                     </ul>
                                 </div>
                             </div>
                         )}
                     </div>
-                    
-                    <div className="text-center py-4 text-gray-400 text-xs mt-auto bg-white border-t border-gray-200">
-                        &copy; {new Date().getFullYear()} NJRA Portal System
-                    </div>
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm border border-gray-200">
+                                <h3 className="font-bold mb-6 text-xl text-njra-900 text-center">Admin Access</h3>
+                                <form onSubmit={handleAdminLogin}>
+                                    <input type="password" placeholder="Code" className="w-full border border-gray-300 p-3 mb-6 rounded outline-none" value={adminPass} onChange={e=>setAdminPass(e.target.value)}/>
+                                    <div className="flex gap-4"><button type="button" onClick={()=>setShowAdminLogin(false)} className="njra-btn njra-btn-secondary flex-1">Cancel</button><button type="submit" className="njra-btn njra-btn-primary flex-1">Login</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                    <div className="text-center py-4 text-gray-400 text-xs mt-auto bg-white border-t border-gray-200">&copy; {new Date().getFullYear()} NJRA Portal</div>
                 </div>
             );
         };
