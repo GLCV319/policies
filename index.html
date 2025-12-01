@@ -94,6 +94,8 @@
             color: #444444;
             line-height: 1.5;
             box-sizing: border-box;
+            
+            /* RESET to standard fluid width */
             width: 100%;
             display: block;
             border: 1px solid #e5e7eb;
@@ -186,6 +188,7 @@
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [adminPass, setAdminPass] = useState("");
             const [status, setStatus] = useState("Connecting...");
+            const [showImport, setShowImport] = useState(false);
             const [importText, setImportText] = useState("");
             
             // AI / Document State
@@ -272,10 +275,12 @@
                                             "options": ["Option A", "Option B", "Option C", "Option D"],
                                             "correctIndex": 0 (integer 0-3 indicating correct option)
                                         },
-                                        { ... create 2 more questions ... }
+                                        { ... create 4 more questions for a total of 5 ... }
                                     ]
                                 }
                             ]
+
+                            IMPORTANT: Ensure there are exactly 5 questions in the "questions" array.
 
                             Here is the raw text:
                             ${rawText}
@@ -594,37 +599,33 @@
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
                                 </div>
                                 
-                                <div className="flex flex-col gap-6 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                                    <div className="flex items-start gap-4 flex-col md:flex-row">
-                                        <div className="flex-grow w-full">
-                                            <h3 className="font-bold text-lg text-njra-900 mb-2">Magic Upload (AI)</h3>
-                                            <p className="text-sm text-gray-600 mb-4">Select Word documents (.docx) to automatically extract content, format policy text, and generate quiz questions.</p>
-                                            
-                                            <div className="flex gap-2 items-center mb-4">
-                                                <input type="password" placeholder="Paste OpenAI Key" className="border border-gray-300 p-2 rounded text-sm w-64" value={apiKey} onChange={handleApiKeyChange} />
-                                                {apiKey && <button onClick={resetApiKey} className="text-red-500 text-xs hover:underline">Reset Key</button>}
+                                {showImport ? (
+                                    <div className="mb-6">
+                                        <p className="mb-2 text-sm text-gray-600">Paste the JSON code below to import policies. <br/><strong>Note:</strong> Policies with existing Codes (e.g. RT-004) will be updated automatically.</p>
+                                        <textarea className="w-full border border-gray-300 p-2 h-48 font-mono text-xs rounded focus:border-njra-500 outline-none" placeholder='[{"title": "..."}]' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
+                                        <div className="flex gap-3 mt-4 justify-end">
+                                            <button onClick={()=>setShowImport(false)} className="njra-btn njra-btn-secondary">Cancel</button>
+                                            <button onClick={handleImport} className="njra-btn njra-btn-primary">Run Smart Import</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-start gap-4 mb-8">
+                                        <button onClick={()=>setShowImport(true)} className="njra-btn njra-btn-primary"><i className="fas fa-file-import mr-2"></i>Import Policies</button>
+                                        
+                                        {/* --- AI UPLOAD SECTION --- */}
+                                        <div className="border-l border-gray-300 pl-4 ml-4 flex items-center gap-2">
+                                            <div className="text-xs text-gray-500 flex flex-col">
+                                                <span className="font-bold">Magic Upload (AI)</span>
+                                                <input type="password" placeholder="Paste OpenAI Key" className="border p-1 rounded w-24 text-xs mt-1" value={apiKey} onChange={handleApiKeyChange} />
                                             </div>
-
-                                            <label className={`njra-btn njra-btn-secondary cursor-pointer ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                            <label className={`njra-btn njra-btn-secondary text-xs cursor-pointer ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                                 {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-magic mr-2"></i>}
                                                 <span>{isProcessing ? 'Processing Documents...' : 'Select Word Documents'}</span>
                                                 <input type="file" accept=".docx" multiple className="hidden" onChange={handleFileUpload} disabled={isProcessing} />
                                             </label>
                                         </div>
                                     </div>
-
-                                    {importText && (
-                                        <div className="border-t border-gray-200 pt-6">
-                                            <h4 className="font-bold text-gray-800 mb-2">Review & Save</h4>
-                                            <p className="text-sm text-gray-500 mb-4">The AI has generated the following data. Click Save to commit to the live database.</p>
-                                            <textarea className="w-full border border-gray-300 p-2 h-32 font-mono text-xs rounded mb-4" value={importText} readOnly></textarea>
-                                            <div className="flex gap-3">
-                                                <button onClick={() => setImportText("")} className="njra-btn njra-btn-secondary">Discard</button>
-                                                <button onClick={handleImport} className="njra-btn njra-btn-primary">Save to Database</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
 
                                 <div>
                                     <h3 className="font-bold mb-4 text-njra-900">Current Database Policies ({policies.length})</h3>
@@ -643,9 +644,23 @@
                                                         {p.title}
                                                     </span>
                                                     <div className="flex items-center gap-2">
-                                                        <button onClick={() => { setSelectedPolicy(p); setView('detail'); }} className="text-gray-500 hover:text-njra-500 p-2" title="View Policy"><i className="fas fa-eye"></i></button>
-                                                        <button onClick={() => { setSelectedPolicy(p); setView('quiz'); }} className="text-gray-500 hover:text-njra-500 p-2" title="View Quiz"><i className="fas fa-graduation-cap"></i></button>
-                                                        <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete Policy"><i className="fas fa-trash"></i></button>
+                                                        <button 
+                                                            onClick={() => { setSelectedPolicy(p); setView('detail'); }} 
+                                                            className="text-gray-500 hover:text-njra-500 p-2"
+                                                            title="View Policy"
+                                                        >
+                                                            <i className="fas fa-eye"></i>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setSelectedPolicy(p); setView('quiz'); }} 
+                                                            className="text-gray-500 hover:text-njra-500 p-2"
+                                                            title="View Quiz"
+                                                        >
+                                                            <i className="fas fa-graduation-cap"></i>
+                                                        </button>
+                                                        <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete Policy">
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
                                                     </div>
                                                 </li>
                                             ));
