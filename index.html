@@ -278,6 +278,125 @@
                 catch(e) { alert("Delete failed: " + e.message); }
             };
 
+            const PolicyList = ({ policies, onSelectPolicy }) => {
+                const [searchTerm, setSearchTerm] = useState("");
+                const [viewMode, setViewMode] = useState('list'); 
+
+                const filteredPolicies = policies.filter(p => 
+                    p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+
+                // Sort by Code, then Title
+                filteredPolicies.sort((a, b) => {
+                    const codeA = a.code || "";
+                    const codeB = b.code || "";
+                    return codeA.localeCompare(codeB) || a.title.localeCompare(b.title);
+                });
+
+                return (
+                    <div className="w-full">
+                        {/* Hero / Search Section */}
+                        <div className="text-center mb-8 bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+                            <h1 className="text-3xl font-bold text-njra-500 mb-2">Policy Database</h1>
+                            <p className="text-gray-500 mb-6">Search respiratory therapy protocols and competencies.</p>
+                            
+                            <div className="max-w-xl mx-auto relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                                    <i className="fas fa-search text-lg"></i>
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-full leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:border-njra-500 focus:ring-1 focus:ring-njra-500 transition-all text-base shadow-sm"
+                                    placeholder="Search by keyword or code..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Controls header */}
+                        <div className="flex justify-between items-center mb-4 px-1">
+                            <h2 className="text-lg font-bold text-gray-700 flex items-center">
+                                Table of Contents 
+                                <span className="ml-3 text-xs font-normal text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{filteredPolicies.length} Documents</span>
+                            </h2>
+                            
+                            <div className="flex bg-white p-1 rounded-md border border-gray-300 shadow-sm">
+                                <button 
+                                    onClick={() => setViewMode('list')}
+                                    className={`px-3 py-1 rounded text-sm font-medium flex items-center transition-all ${viewMode === 'list' ? 'bg-njra-50 text-njra-500' : 'text-gray-400 hover:text-gray-600'}`}
+                                    title="List View"
+                                >
+                                    <i className="fas fa-list"></i>
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('grid')}
+                                    className={`px-3 py-1 rounded text-sm font-medium flex items-center transition-all ${viewMode === 'grid' ? 'bg-njra-50 text-njra-500' : 'text-gray-400 hover:text-gray-600'}`}
+                                    title="Grid View"
+                                >
+                                    <i className="fas fa-th-large"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content Display */}
+                        {viewMode === 'grid' ? (
+                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
+                                {filteredPolicies.map(p => (
+                                    <div key={p.id} onClick={() => onSelectPolicy(p)} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-lg hover:border-njra-500 transition-all group">
+                                        <div className="flex items-center mb-4">
+                                            <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
+                                            <div className="ml-4 overflow-hidden">
+                                                <div className="text-xs text-gray-500 font-mono">{p.code}</div>
+                                                <div className="font-bold text-njra-900 truncate">{p.title}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-njra-500 text-sm font-bold group-hover:translate-x-1 transition-transform inline-block">View Policy &rarr;</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Code</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Policy Title</th>
+                                            <th scope="col" className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {filteredPolicies.map((policy, idx) => (
+                                            <tr 
+                                                key={policy.id} 
+                                                onClick={() => onSelectPolicy(policy)} 
+                                                className={`cursor-pointer transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-njra-50`}
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{policy.code || '-'}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-900 font-medium">{policy.title}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                                    <span className="text-njra-500 hover:text-njra-600 font-bold flex items-center justify-end">Open <i className="fas fa-chevron-right ml-2 text-xs"></i></span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        
+                        {/* Empty State */}
+                        {filteredPolicies.length === 0 && (
+                            <div className="text-center py-12 bg-white rounded-lg border border-gray-200 border-dashed">
+                                <i className="fas fa-search text-4xl text-gray-300 mb-4"></i>
+                                <p className="text-gray-500 text-lg">No policies found matching your search.</p>
+                                <button onClick={() => setSearchTerm('')} className="mt-4 text-njra-500 hover:underline font-bold">Clear Search</button>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
             const QuizComponent = ({ policy }) => {
                 const [qIndex, setQIndex] = useState(0);
                 const [score, setScore] = useState(0);
@@ -413,21 +532,8 @@
 
                     <div className="w-full px-4 py-8 flex-grow bg-gray-50">
                         <div className="max-w-7xl mx-auto w-full"> 
-                            {view === 'home' && policies.length > 0 && (
-                                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 w-full">
-                                    {policies.map(p => (
-                                        <div key={p.id} onClick={()=>{setSelectedPolicy(p); setView('detail');}} className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-lg hover:border-njra-200 transition-all group">
-                                            <div className="flex items-center mb-4">
-                                                <div className="bg-njra-50 p-3 rounded-md text-njra-500 group-hover:bg-njra-500 group-hover:text-white transition-colors"><i className="fas fa-file-medical text-xl"></i></div>
-                                                <div className="ml-4 overflow-hidden">
-                                                    <div className="text-xs text-gray-500 font-mono">{p.code}</div>
-                                                    <div className="font-bold text-njra-900 truncate">{p.title}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-njra-500 text-sm font-bold group-hover:translate-x-1 transition-transform inline-block">View Policy &rarr;</div>
-                                        </div>
-                                    ))}
-                                </div>
+                            {view === 'home' && (
+                                <PolicyList policies={policies} onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} />
                             )}
 
                             {view === 'detail' && selectedPolicy && (
