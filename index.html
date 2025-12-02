@@ -136,6 +136,14 @@
             background-color: #000000 !important;
         }
 
+        .njra-btn-success {
+            background-color: #16a34a !important; /* GREEN */
+            color: #ffffff !important;
+        }
+        .njra-btn-success:hover {
+            background-color: #15803d !important;
+        }
+
         .njra-btn-outline {
             background-color: #e2e8f0 !important; /* LIGHT GRAY */
             color: #444444 !important;
@@ -248,7 +256,7 @@
                 setView('batch_print');
             };
 
-            // --- AI & IMPORT LOGIC (Same as before) ---
+            // --- AI & IMPORT LOGIC ---
             const handleApiKeyChange = (e) => {
                 const key = e.target.value.trim();
                 setApiKey(key);
@@ -259,17 +267,41 @@
                 localStorage.removeItem('njra_openai_key');
                 alert("API Key cleared.");
             };
+
+            // NEW: TEST CONNECTION FUNCTION
+            const testOpenAIConnection = async () => {
+                if (!apiKey) { alert("Please enter a key first."); return; }
+                setStatus("Testing Connection...");
+                try {
+                    const response = await fetch("https://api.openai.com/v1/models", {
+                        method: "GET",
+                        headers: { "Authorization": `Bearer ${apiKey}` }
+                    });
+                    if (response.ok) {
+                        alert("Connection Successful! Your API Key is valid.");
+                    } else {
+                        const err = await response.json();
+                        alert("Connection Failed: " + (err.error?.message || response.statusText));
+                    }
+                } catch (e) {
+                    alert("Network Error (Failed to Fetch). Check your internet or firewall.");
+                }
+                setStatus("");
+            };
+
             const handleFileSelect = (e) => {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
                 setUploadQueue(prev => [...prev, ...files]);
             };
             const removeFile = (idx) => { setUploadQueue(prev => prev.filter((_, i) => i !== idx)); };
+            
             const processFiles = async () => {
                 if (!apiKey) { alert("Please enter an OpenAI API Key first."); return; }
                 if (uploadQueue.length === 0) return;
                 setIsProcessing(true);
                 let combinedJson = [];
+                
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
                     setStatus(`Processing ${i+1}/${uploadQueue.length}: ${file.name}...`);
@@ -304,7 +336,12 @@
                             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
                             body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } })
                         });
-                        if (!response.ok) { const errData = await response.json(); throw new Error(`OpenAI Error: ${errData.error?.message || response.statusText}`); }
+                        
+                        if (!response.ok) { 
+                            const errData = await response.json(); 
+                            throw new Error(`OpenAI Error: ${errData.error?.message || response.statusText}`); 
+                        }
+                        
                         const data = await response.json();
                         let content = data.choices[0].message.content;
                         let jsonObject = JSON.parse(content);
@@ -313,33 +350,35 @@
                         else combinedJson.push(jsonObject);
                     } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
                 }
-                setProcessedData(combinedJson);
+                
+                // SAVE DIRECTLY TO DB AFTER PROCESSING
+                if(combinedJson.length > 0) {
+                    setStatus("Saving to Database...");
+                    let updatedCount = 0;
+                    let addedCount = 0;
+                    
+                    for(let item of combinedJson) {
+                        let exists = false;
+                        let existingId = null;
+                        if (item.code) {
+                            const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
+                            const snapshot = await window.getDocs(q);
+                            if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
+                        }
+                        if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
+                        else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
+                    }
+                    alert(`Upload Complete!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
+                }
+                
                 setStatus("");
                 setIsProcessing(false);
                 setUploadQueue([]); 
             };
+
             const handleCategoryChange = (idx, newCat) => { const newData = [...processedData]; newData[idx].category = newCat; setProcessedData(newData); };
             const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); } catch(e) { alert("Update failed: " + e.message); } };
-            const saveToDatabase = async () => {
-                if(!confirm(`Saving ${processedData.length} policies to Live Database... Continue?`)) return;
-                setStatus("Saving to Database...");
-                let addedCount = 0;
-                let updatedCount = 0;
-                for(let item of processedData) {
-                    let exists = false;
-                    let existingId = null;
-                    if (item.code) {
-                        const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
-                        const snapshot = await window.getDocs(q);
-                        if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
-                    }
-                    if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
-                    else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
-                }
-                setStatus("");
-                alert(`Success!\n\nNew Policies: ${addedCount}\nUpdated Policies: ${updatedCount}`);
-                setProcessedData([]); 
-            };
+            
             const handleDelete = async (id) => {
                 if(!confirm("Delete this policy permanently?")) return;
                 try { await window.deleteDoc(window.doc(window.db, 'policies', id)); } 
@@ -504,8 +543,8 @@
                 const handlePrint = () => { window.print(); }
 
                 return (
-                    <div className="max-w-3xl mx-auto mt-8 w-full animate-slide-up">
-                        <div className="bg-white p-8 rounded border border-gray-300 shadow-md">
+                    <div className="max-w-3xl mx-auto mt-8 w-full">
+                        <div className="bg-white p-8 rounded border border-gray-300 shadow-md print:shadow-none print:border-none">
                             <div className="mb-8 border-b border-gray-200 pb-6 text-center">
                                 <h1 className="text-2xl font-bold text-njra-900 mb-2">{policy.title}</h1>
                                 <p className="text-gray-500">Competency Evaluation</p>
@@ -513,20 +552,23 @@
                             </div>
                             <div className="print-only hidden">{isPassed && (<div className="border-4 border-double border-black p-8 m-4 text-center"><h1 className="text-4xl font-serif mb-6">Certificate of Competency</h1><p className="text-lg">Certifies that <strong>{userName}</strong> passed:</p><h3 className="text-xl font-bold my-4">{policy.title}</h3><p>Date: {new Date().toLocaleDateString()}</p></div>)}</div>
                             <div className={`space-y-8 ${showResult && isPassed ? 'print:hidden' : ''}`}>
-                                {questions.map((q, idx) => (
-                                    <div key={idx} className="quiz-question-block"><div className="flex gap-3 mb-3"><span className="font-bold text-gray-400">{idx + 1}.</span><h3 className="font-bold text-gray-800 text-lg">{q.text}</h3></div><div className="pl-8 space-y-2">{q.options.map((opt, oIdx) => {
-                                        let itemClass = "block w-full text-left p-3 border rounded transition-all flex items-center ";
-                                        if (showResult) {
-                                            if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 font-bold ";
-                                            else if (oIdx === userAnswers[idx]) itemClass += "bg-red-50 border-red-500 ";
-                                            else itemClass += "bg-gray-50 opacity-60 ";
-                                        } else {
-                                            if (userAnswers[idx] === oIdx) itemClass += "bg-njra-50 border-njra-500 font-medium ";
-                                            else itemClass += "bg-white border-gray-300 hover:bg-gray-50 ";
-                                        }
-                                        return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${userAnswers[idx] === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswers[idx] === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}</button>);
-                                    })}</div></div>
-                                ))}
+                                {questions.map((q, idx) => {
+                                    const userAnswer = userAnswers[idx];
+                                    return (
+                                        <div key={idx} className="quiz-question-block"><div className="flex gap-3 mb-3"><span className="font-bold text-gray-400">{idx + 1}.</span><h3 className="font-bold text-gray-800 text-lg">{q.text}</h3></div><div className="pl-8 space-y-2">{q.options.map((opt, oIdx) => {
+                                            let itemClass = "block w-full text-left p-3 border rounded transition-all flex items-center ";
+                                            if (showResult) {
+                                                if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 font-bold ";
+                                                else if (oIdx === userAnswers[idx]) itemClass += "bg-red-50 border-red-500 ";
+                                                else itemClass += "bg-gray-50 opacity-60 ";
+                                            } else {
+                                                if (userAnswer === oIdx) itemClass += "bg-njra-50 border-njra-500 font-medium ";
+                                                else itemClass += "bg-white border-gray-300 hover:bg-gray-50 ";
+                                            }
+                                            return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${userAnswers[idx] === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswers[idx] === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}</button>);
+                                        })}</div></div>
+                                    );
+                                })}
                             </div>
                             <div className="mt-10 pt-6 border-t border-gray-200 no-print">{!showResult ? (<div className="flex justify-between items-center"><div className="text-sm text-gray-500">{Object.keys(userAnswers).length} / {questions.length} answered</div><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed' : 'njra-btn-primary'}`}>Submit</button></div>) : (<div className="space-y-4 bg-gray-50 p-6 rounded-lg"><input className="border border-gray-300 p-3 w-full rounded" placeholder="Enter Name" value={userName} onChange={e=>setUserName(e.target.value)} /><div className="flex gap-3"><button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary flex-1">Email Result</button>{isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary flex-1">Print Certificate</button>}<button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button></div></div>)}</div>
                         </div>
@@ -571,15 +613,14 @@
                         {view === 'batch_print' && <BatchPrintView />}
 
                         {view === 'detail' && selectedPolicy && (
-                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full animate-slide-up">
-                                {/* Cleaner Header: White background, Red Title */}
-                                <div className="bg-white p-8 border-b border-gray-200 flex justify-between items-start">
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
+                                <div className="bg-njra-900 text-white p-6 flex justify-between items-center">
                                     <div>
-                                        <div className="text-gray-400 text-sm mb-1 uppercase tracking-wide font-bold">{selectedPolicy.code}</div>
-                                        <h1 className="text-3xl font-bold text-njra-500 m-0 border-0">{selectedPolicy.title}</h1>
+                                        <div className="text-gray-300 text-sm mb-1">{selectedPolicy.code}</div>
+                                        <h1 className="text-2xl font-bold leading-tight text-white m-0 border-0">{selectedPolicy.title}</h1>
                                         <div className="mt-2 text-sm text-gray-500 bg-gray-100 inline-block px-2 py-1 rounded">{selectedPolicy.category || "Uncategorized"}</div>
                                     </div>
-                                    <button onClick={()=>setView('home')} className="text-gray-400 hover:text-njra-500 transition-colors"><i className="fas fa-times text-2xl"></i></button>
+                                    <button onClick={()=>setView('home')} className="text-gray-300 hover:text-white ml-4 flex-shrink-0"><i className="fas fa-times text-xl"></i></button>
                                 </div>
                                 <div className="p-4 bg-gray-50 flex justify-end gap-3 border-b border-gray-200 no-print">
                                     <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary"><i className="fas fa-print mr-2"></i>Print</button>
@@ -592,7 +633,7 @@
                         {view === 'quiz' && selectedPolicy && <QuizComponent policy={selectedPolicy} />}
                         
                         {view === 'admin' && (
-                            <div className="bg-white p-8 rounded border border-gray-200 shadow-md animate-slide-up">
+                            <div className="bg-white p-8 rounded border border-gray-200 shadow-md">
                                 <div className="flex justify-between items-center mb-6 border-b pb-4">
                                     <h2 className="text-xl font-bold text-njra-900">Admin Dashboard</h2>
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
@@ -634,6 +675,7 @@
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <input type="password" placeholder="OpenAI Key" className="border p-1 rounded w-24 text-xs" value={apiKey} onChange={handleApiKeyChange} />
                                                     {apiKey && <button onClick={resetApiKey} className="text-red-500 hover:text-red-700"><i className="fas fa-times"></i></button>}
+                                                    {apiKey && <button onClick={testOpenAIConnection} className="text-green-600 hover:text-green-800 text-xs underline">Test Connection</button>}
                                                 </div>
                                             </div>
                                             <label className={`njra-btn njra-btn-secondary cursor-pointer text-sm ${isProcessing ? 'opacity-50' : ''}`}>
@@ -641,6 +683,25 @@
                                                 <span>{isProcessing ? 'Processing...' : 'Upload Word Docs'}</span>
                                                 <input type="file" accept=".docx" multiple className="hidden" onChange={handleFileSelect} disabled={isProcessing} />
                                             </label>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Upload Queue Section */}
+                                {uploadQueue.length > 0 && !isProcessing && (
+                                    <div className="border-t border-gray-200 pt-6 mb-6">
+                                        <h4 className="font-bold text-gray-800 mb-2">Selected Documents ({uploadQueue.length})</h4>
+                                        <ul className="mb-4 space-y-2">
+                                            {uploadQueue.map((file, idx) => (
+                                                <li key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-gray-200">
+                                                    <span>{file.name}</span>
+                                                    <button onClick={() => removeFile(idx)} className="text-red-500 hover:text-red-700"><i className="fas fa-trash"></i></button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => setUploadQueue([])} className="njra-btn njra-btn-secondary">Clear All</button>
+                                            <button onClick={processFiles} className="njra-btn njra-btn-primary">Process Files (AI)</button>
                                         </div>
                                     </div>
                                 )}
