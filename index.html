@@ -136,14 +136,6 @@
             background-color: #000000 !important;
         }
 
-        .njra-btn-success {
-            background-color: #16a34a !important; /* GREEN */
-            color: #ffffff !important;
-        }
-        .njra-btn-success:hover {
-            background-color: #15803d !important;
-        }
-
         .njra-btn-outline {
             background-color: #e2e8f0 !important; /* LIGHT GRAY */
             color: #444444 !important;
@@ -174,7 +166,6 @@
             #njra-app-root { border: none; width: 100% !important; margin: 0 !important; }
             .quiz-question-block { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
             .print-page-break { page-break-before: always; }
-            /* Cover Page Specifics */
             .print-cover-page { 
                 height: 100vh; 
                 display: flex; 
@@ -214,16 +205,16 @@
             const [adminPass, setAdminPass] = useState("");
             const [status, setStatus] = useState("Connecting...");
             const [selectedForPrint, setSelectedForPrint] = useState(new Set()); 
+            const [lastUpdated, setLastUpdated] = useState("");
             
             // AI
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
             const [uploadQueue, setUploadQueue] = useState([]); 
             const [processedData, setProcessedData] = useState([]);
-            const [showImport, setShowImport] = useState(false);
-            const [importText, setImportText] = useState("");
 
             useEffect(() => {
+                setLastUpdated(new Date().toLocaleString());
                 const init = async () => {
                     setTimeout(() => { if(status === "Connecting...") setStatus("Connecting..."); }, 2000);
                     try {
@@ -268,7 +259,6 @@
                 alert("API Key cleared.");
             };
 
-            // NEW: TEST CONNECTION FUNCTION
             const testOpenAIConnection = async () => {
                 if (!apiKey) { alert("Please enter a key first."); return; }
                 setStatus("Testing Connection...");
@@ -284,7 +274,7 @@
                         alert("Connection Failed: " + (err.error?.message || response.statusText));
                     }
                 } catch (e) {
-                    alert("Network Error (Failed to Fetch). Check your internet or firewall.");
+                    alert("Network Error. Check internet/firewall.");
                 }
                 setStatus("");
             };
@@ -300,8 +290,9 @@
                 if (!apiKey) { alert("Please enter an OpenAI API Key first."); return; }
                 if (uploadQueue.length === 0) return;
                 setIsProcessing(true);
-                let combinedJson = [];
                 
+                let combinedJson = [];
+
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
                     setStatus(`Processing ${i+1}/${uploadQueue.length}: ${file.name}...`);
@@ -310,12 +301,15 @@
                         const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
                         const rawText = result.value;
                         const prompt = `
-                            You are a medical policy assistant. I will give you the raw text of a respiratory therapy policy.
-                            You must return a VALID JSON array containing exactly one object with this structure:
+                            You are a medical policy assistant. 
+                            You must return a VALID JSON array containing exactly one object.
+                            CRITICAL: If a code (e.g. RT-00X) is not explicitly found, GENERATE A UNIQUE ONE based on the title initials.
+                            
+                            Structure:
                             [
                                 {
                                     "title": "Extract Title",
-                                    "code": "Extract Code (e.g. RT-00X) or generate one if missing",
+                                    "code": "Extract Code OR Generate Unique Code",
                                     "category": "Pick best fit: 'Emergency Procedures', 'Clinical Care', 'Equipment Management', 'Patient Assessment', 'Infection Control', 'Documentation', or 'Administrative'",
                                     "content": "The full policy text formatted as clean HTML (use <h2>, <p>, <ul>, <li>, <strong>). Correct grammar and spelling.",
                                     "questions": [
@@ -348,37 +342,39 @@
                         if (jsonObject.policies) combinedJson.push(...jsonObject.policies);
                         else if (Array.isArray(jsonObject)) combinedJson.push(...jsonObject);
                         else combinedJson.push(jsonObject);
+
                     } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
                 }
                 
-                // SAVE DIRECTLY TO DB AFTER PROCESSING
-                if(combinedJson.length > 0) {
-                    setStatus("Saving to Database...");
-                    let updatedCount = 0;
-                    let addedCount = 0;
-                    
-                    for(let item of combinedJson) {
-                        let exists = false;
-                        let existingId = null;
-                        if (item.code) {
-                            const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
-                            const snapshot = await window.getDocs(q);
-                            if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
-                        }
-                        if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
-                        else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
-                    }
-                    alert(`Upload Complete!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
-                }
-                
+                setProcessedData(combinedJson);
                 setStatus("");
                 setIsProcessing(false);
                 setUploadQueue([]); 
             };
 
-            const handleCategoryChange = (idx, newCat) => { const newData = [...processedData]; newData[idx].category = newCat; setProcessedData(newData); };
             const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); } catch(e) { alert("Update failed: " + e.message); } };
             
+            const saveToDatabase = async () => {
+                if(!confirm(`Saving ${processedData.length} policies to Live Database... Continue?`)) return;
+                setStatus("Saving to Database...");
+                let addedCount = 0;
+                let updatedCount = 0;
+                for(let item of processedData) {
+                    let exists = false;
+                    let existingId = null;
+                    if (item.code) {
+                        const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
+                        const snapshot = await window.getDocs(q);
+                        if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
+                    }
+                    if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
+                    else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
+                }
+                setStatus("");
+                alert(`Success!\n\nNew Policies: ${addedCount}\nUpdated Policies: ${updatedCount}`);
+                setProcessedData([]); 
+            };
+
             const handleDelete = async (id) => {
                 if(!confirm("Delete this policy permanently?")) return;
                 try { await window.deleteDoc(window.doc(window.db, 'policies', id)); } 
@@ -565,7 +561,7 @@
                                                 if (userAnswer === oIdx) itemClass += "bg-njra-50 border-njra-500 font-medium ";
                                                 else itemClass += "bg-white border-gray-300 hover:bg-gray-50 ";
                                             }
-                                            return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${userAnswers[idx] === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswers[idx] === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}</button>);
+                                            return (<button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}><div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${userAnswers[idx] === oIdx ? 'border-njra-500 bg-njra-500' : 'border-gray-400'}`}>{userAnswer === oIdx && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>{opt}</button>);
                                         })}</div></div>
                                     );
                                 })}
@@ -593,7 +589,7 @@
                                 </div>
                                 <div className="flex items-center space-x-3">
                                     <button onClick={() => setView('home')} className={`njra-btn ${view === 'home' ? 'njra-btn-secondary' : 'njra-btn-outline'}`}>Policies</button>
-                                    <button onClick={() => setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500 p-2"><i className="fas fa-lock"></i></button>
+                                    <button type="button" onClick={() => setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500 p-2 cursor-pointer"><i className="fas fa-lock"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -614,13 +610,13 @@
 
                         {view === 'detail' && selectedPolicy && (
                             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
-                                <div className="bg-njra-900 text-white p-6 flex justify-between items-center">
+                                <div className="bg-white p-8 border-b border-gray-200 flex justify-between items-start">
                                     <div>
-                                        <div className="text-gray-300 text-sm mb-1">{selectedPolicy.code}</div>
-                                        <h1 className="text-2xl font-bold leading-tight text-white m-0 border-0">{selectedPolicy.title}</h1>
+                                        <div className="text-gray-400 text-sm mb-1 uppercase tracking-wide font-bold">{selectedPolicy.code}</div>
+                                        <h1 className="text-3xl font-bold text-njra-500 m-0 border-0">{selectedPolicy.title}</h1>
                                         <div className="mt-2 text-sm text-gray-500 bg-gray-100 inline-block px-2 py-1 rounded">{selectedPolicy.category || "Uncategorized"}</div>
                                     </div>
-                                    <button onClick={()=>setView('home')} className="text-gray-300 hover:text-white ml-4 flex-shrink-0"><i className="fas fa-times text-xl"></i></button>
+                                    <button onClick={()=>setView('home')} className="text-gray-400 hover:text-njra-500 transition-colors"><i className="fas fa-times text-2xl"></i></button>
                                 </div>
                                 <div className="p-4 bg-gray-50 flex justify-end gap-3 border-b border-gray-200 no-print">
                                     <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary"><i className="fas fa-print mr-2"></i>Print</button>
@@ -639,76 +635,66 @@
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
                                 </div>
                                 
-                                {showImport ? (
-                                    <div className="mb-6">
-                                        <p className="mb-2 text-sm text-gray-600">Review AI Output. Edit categories if needed before saving.</p>
-                                        
-                                        <div className="bg-gray-50 p-4 rounded border border-gray-200 max-h-96 overflow-y-auto mb-4">
-                                            {processedData.map((item, idx) => (
-                                                <div key={idx} className="bg-white p-3 mb-2 rounded border flex flex-col md:flex-row gap-4 items-start">
-                                                    <div className="flex-grow">
-                                                        <div className="font-bold">{item.title}</div>
-                                                        <div className="text-xs text-gray-500">{item.code}</div>
-                                                    </div>
-                                                    <select 
-                                                        className="border border-gray-300 p-1 rounded text-sm w-48"
-                                                        value={item.category || ""} 
-                                                        onChange={(e) => handleCategoryChange(idx, e.target.value)}
-                                                    >
-                                                        <option value="">Select Category...</option>
-                                                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                                    </select>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="flex gap-3 justify-end">
-                                            <button onClick={() => { setShowImport(false); setProcessedData([]); }} className="njra-btn njra-btn-secondary">Discard</button>
-                                            <button onClick={saveToDatabase} className="njra-btn njra-btn-primary">Save to Database</button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex justify-start gap-4 mb-8">
-                                        <div className="border border-gray-300 p-4 rounded flex items-center gap-4 bg-gray-50 w-full md:w-auto">
-                                            <div className="text-xs text-gray-500 flex flex-col">
-                                                <span className="font-bold text-gray-700">Magic Upload (AI)</span>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <input type="password" placeholder="OpenAI Key" className="border p-1 rounded w-24 text-xs" value={apiKey} onChange={handleApiKeyChange} />
-                                                    {apiKey && <button onClick={resetApiKey} className="text-red-500 hover:text-red-700"><i className="fas fa-times"></i></button>}
-                                                    {apiKey && <button onClick={testOpenAIConnection} className="text-green-600 hover:text-green-800 text-xs underline">Test Connection</button>}
+                                <div className="flex flex-col gap-4 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* 1. API Key Management */}
+                                        <div className="flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="font-bold text-lg text-njra-900 mb-1">1. Configure AI</h3>
+                                                <p className="text-xs text-gray-500 mb-2">Required for reading Word docs.</p>
+                                            </div>
+                                            <div className="flex gap-2 items-center">
+                                                <input type="password" placeholder="Paste OpenAI Key Here" className="border p-2 rounded text-sm flex-grow bg-white" value={apiKey} onChange={handleApiKeyChange} />
+                                                <div className="flex flex-col gap-1">
+                                                    {apiKey && <button onClick={resetApiKey} className="text-red-500 text-xs hover:underline font-bold">Reset Key</button>}
+                                                    {apiKey && <button onClick={testOpenAIConnection} className="text-green-600 text-xs hover:underline font-bold">Test Key</button>}
                                                 </div>
                                             </div>
-                                            <label className={`njra-btn njra-btn-secondary cursor-pointer text-sm ${isProcessing ? 'opacity-50' : ''}`}>
-                                                {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-magic mr-2"></i>}
-                                                <span>{isProcessing ? 'Processing...' : 'Upload Word Docs'}</span>
+                                        </div>
+
+                                        {/* 2. Upload Area */}
+                                        <div className="flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="font-bold text-lg text-njra-900 mb-1">2. Upload Documents</h3>
+                                                <p className="text-xs text-gray-500 mb-2">Select multiple .docx files to process.</p>
+                                            </div>
+                                            <label className={`njra-btn njra-btn-secondary cursor-pointer w-full text-center justify-center ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                                {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-file-upload mr-2"></i>}
+                                                <span>{isProcessing ? 'Analyzing...' : 'Select Files'}</span>
                                                 <input type="file" accept=".docx" multiple className="hidden" onChange={handleFileSelect} disabled={isProcessing} />
                                             </label>
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Upload Queue Section */}
-                                {uploadQueue.length > 0 && !isProcessing && (
-                                    <div className="border-t border-gray-200 pt-6 mb-6">
-                                        <h4 className="font-bold text-gray-800 mb-2">Selected Documents ({uploadQueue.length})</h4>
-                                        <ul className="mb-4 space-y-2">
-                                            {uploadQueue.map((file, idx) => (
-                                                <li key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-gray-200">
-                                                    <span>{file.name}</span>
-                                                    <button onClick={() => removeFile(idx)} className="text-red-500 hover:text-red-700"><i className="fas fa-trash"></i></button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <div className="flex gap-3">
-                                            <button onClick={() => setUploadQueue([])} className="njra-btn njra-btn-secondary">Clear All</button>
-                                            <button onClick={processFiles} className="njra-btn njra-btn-primary">Process Files (AI)</button>
+                                    {/* 3. Upload Queue & Process */}
+                                    {uploadQueue.length > 0 && !isProcessing && (
+                                        <div className="mt-4 border-t pt-4">
+                                            <h4 className="font-bold text-sm text-gray-700 mb-3">Files Ready to Process ({uploadQueue.length})</h4>
+                                            <ul className="mb-4 space-y-2 max-h-40 overflow-y-auto">
+                                                {uploadQueue.map((file, idx) => (
+                                                    <li key={idx} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-300">
+                                                        <span className="font-mono">{file.name}</span>
+                                                        <button onClick={() => removeFile(idx)} className="text-red-500 hover:text-red-700"><i className="fas fa-trash"></i></button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <div className="flex gap-3 justify-end">
+                                                <button onClick={() => setUploadQueue([])} className="text-gray-500 text-sm hover:underline px-3">Clear Queue</button>
+                                                <button onClick={processFiles} className="njra-btn njra-btn-primary"><i className="fas fa-magic mr-2"></i> Process & Save to Database</button>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+
+                                    {processedData.length > 0 && (
+                                        <div className="mt-4 bg-green-50 p-4 rounded text-center text-green-800 border border-green-200">
+                                            <i className="fas fa-check-circle mr-2"></i> Processing Complete!
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div>
-                                    <h3 className="font-bold mb-4 text-njra-900 border-b pb-2">Database Content ({policies.length})</h3>
-                                    <ul>
+                                    <h3 className="font-bold mb-4 text-njra-900 border-b pb-2">Current Database Policies ({policies.length})</h3>
+                                    <ul className="max-h-[500px] overflow-y-auto">
                                         {policies.sort((a,b) => (a.code||"").localeCompare(b.code||"")).map(p => (
                                             <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2 flex-wrap gap-2">
                                                 <div className="flex flex-col">
@@ -745,7 +731,9 @@
                             </div>
                         </div>
                     )}
-                    <div className="text-center py-4 text-gray-400 text-xs mt-auto bg-white border-t border-gray-200">&copy; {new Date().getFullYear()} NJRA Portal</div>
+                    <div className="text-center py-4 text-gray-400 text-xs mt-auto bg-white border-t border-gray-200">
+                        &copy; 2025 New Jersey Respiratory, Inc / All rights reserved - Last Updated: {lastUpdated}
+                    </div>
                 </div>
             );
         };
