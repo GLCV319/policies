@@ -24,7 +24,7 @@
     <!-- Firebase Connection -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, where, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
         // --- LIVE DATABASE CONFIGURATION ---
@@ -51,6 +51,8 @@
             window.getDocs = getDocs;
             window.updateDoc = updateDoc;
             window.deleteDoc = deleteDoc;
+            window.setDoc = setDoc;
+            window.getDoc = getDoc;
             window.doc = doc;
             window.onSnapshot = onSnapshot;
             window.query = query;
@@ -94,8 +96,6 @@
             color: #444444;
             line-height: 1.5;
             box-sizing: border-box;
-            
-            /* RESET to standard fluid width */
             width: 100%;
             display: block;
             border: 1px solid #e5e7eb;
@@ -166,7 +166,6 @@
             #njra-app-root { border: none; width: 100% !important; margin: 0 !important; }
             .quiz-question-block { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
             .print-page-break { page-break-before: always; }
-            /* Cover Page Specifics */
             .print-cover-page { 
                 height: 100vh; 
                 display: flex; 
@@ -206,18 +205,14 @@
             const [adminPass, setAdminPass] = useState("");
             const [status, setStatus] = useState("Connecting...");
             const [selectedForPrint, setSelectedForPrint] = useState(new Set()); 
-            const [lastUpdated, setLastUpdated] = useState("");
+            const [lastUpdated, setLastUpdated] = useState("Loading...");
             
             // AI
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
             const [uploadQueue, setUploadQueue] = useState([]); 
-            const [processedData, setProcessedData] = useState([]);
-            const [showImport, setShowImport] = useState(false);
-            const [importText, setImportText] = useState("");
 
             useEffect(() => {
-                setLastUpdated(new Date().toLocaleString());
                 const init = async () => {
                     setTimeout(() => { if(status === "Connecting...") setStatus("Connecting..."); }, 2000);
                     try {
@@ -229,6 +224,13 @@
                                 setPolicies(loaded);
                                 setStatus(""); 
                             }, (error) => { console.error("DB Error:", error); setStatus("Error: " + error.message); });
+                            
+                            // Fetch Last Updated Timestamp
+                            const metaRef = window.doc(window.db, 'metadata', 'system');
+                            window.onSnapshot(metaRef, (doc) => {
+                                if(doc.exists()) setLastUpdated(doc.data().lastUpdated);
+                                else setLastUpdated("N/A");
+                            });
                         } else { setStatus("System initializing..."); }
                     } catch (e) { console.error("Init Error:", e); setStatus("Connection Error: " + e.message); }
                 };
@@ -237,6 +239,12 @@
                 const codeParam = params.get('code');
                 init();
             }, []);
+
+            // --- UPDATE TIMESTAMP ---
+            const updateSystemTimestamp = async () => {
+                const now = new Date().toLocaleString();
+                await window.setDoc(window.doc(window.db, 'metadata', 'system'), { lastUpdated: now });
+            };
 
             // --- SELECTION HANDLER ---
             const togglePrintSelection = (policyId) => {
@@ -294,7 +302,8 @@
                 if (uploadQueue.length === 0) return;
                 setIsProcessing(true);
                 
-                let combinedJson = [];
+                let successCount = 0;
+                let updateCount = 0;
 
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
@@ -342,45 +351,39 @@
                         const data = await response.json();
                         let content = data.choices[0].message.content;
                         let jsonObject = JSON.parse(content);
-                        if (jsonObject.policies) combinedJson.push(...jsonObject.policies);
-                        else if (Array.isArray(jsonObject)) combinedJson.push(...jsonObject);
-                        else combinedJson.push(jsonObject);
+                        let items = [];
+                        if (jsonObject.policies) items = jsonObject.policies;
+                        else if (Array.isArray(jsonObject)) items = jsonObject;
+                        else items = [jsonObject];
+
+                        // SAVE DIRECTLY TO DB
+                        for(let item of items) {
+                            let exists = false;
+                            let existingId = null;
+                            if (item.code) {
+                                const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
+                                const snapshot = await window.getDocs(q);
+                                if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
+                            }
+                            if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updateCount++; } 
+                            else { await window.addDoc(window.collection(window.db, 'policies'), item); successCount++; }
+                        }
 
                     } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
                 }
                 
-                setProcessedData(combinedJson);
+                await updateSystemTimestamp();
                 setStatus("");
                 setIsProcessing(false);
                 setUploadQueue([]); 
+                alert(`Upload Complete!\nAdded: ${successCount}\nUpdated: ${updateCount}`);
             };
 
-            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); } catch(e) { alert("Update failed: " + e.message); } };
+            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
             
-            const saveToDatabase = async () => {
-                if(!confirm(`Saving ${processedData.length} policies to Live Database... Continue?`)) return;
-                setStatus("Saving to Database...");
-                let addedCount = 0;
-                let updatedCount = 0;
-                for(let item of processedData) {
-                    let exists = false;
-                    let existingId = null;
-                    if (item.code) {
-                        const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
-                        const snapshot = await window.getDocs(q);
-                        if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
-                    }
-                    if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updatedCount++; } 
-                    else { await window.addDoc(window.collection(window.db, 'policies'), item); addedCount++; }
-                }
-                setStatus("");
-                alert(`Success!\n\nNew Policies: ${addedCount}\nUpdated Policies: ${updatedCount}`);
-                setProcessedData([]); 
-            };
-
             const handleDelete = async (id) => {
                 if(!confirm("Delete this policy permanently?")) return;
-                try { await window.deleteDoc(window.doc(window.db, 'policies', id)); } 
+                try { await window.deleteDoc(window.doc(window.db, 'policies', id)); await updateSystemTimestamp(); } 
                 catch(e) { alert("Delete failed: " + e.message); }
             };
 
