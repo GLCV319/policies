@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NJ Respiratory Policy Portal</title>
     
     <!-- React & ReactDOM -->
@@ -72,7 +72,6 @@
 
     <script>
         // --- EMAILJS CONFIGURATION ---
-        // REPLACE THESE WITH YOUR ACTUAL KEYS
         const EMAILJS_SERVICE_ID = "service_e8rbn3f";   
         const EMAILJS_TEMPLATE_ID = "template_tnqja7a"; 
         const EMAILJS_PUBLIC_KEY = "I-fs7ljzMeCgNUEGJ"; 
@@ -121,6 +120,41 @@
         }
         
         #njra-app-root *, #njra-app-root *::before, #njra-app-root *::after { box-sizing: inherit; }
+
+        /* --- RESPONSIVE LAYOUT OVERRIDES --- */
+        /* Only apply the full-screen breakout on tablets and larger */
+        @media (min-width: 768px) {
+            #njra-app-root {
+                width: 95vw !important;
+                max-width: 1400px !important;
+                position: relative;
+                left: 50%;
+                transform: translateX(-50%);
+                margin: 20px 0;
+            }
+        }
+
+        /* Mobile Specific Tweaks */
+        @media (max-width: 767px) {
+            #njra-app-root {
+                border: none;
+                border-radius: 0;
+                margin: 0;
+                width: 100% !important;
+            }
+            .njra-mobile-stack {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 1rem;
+            }
+            .njra-btn {
+                width: 100%; /* Full width buttons on mobile */
+                justify-content: center;
+            }
+            .njra-hide-mobile {
+                display: none;
+            }
+        }
 
         /* --- BUTTON OVERRIDES --- */
         .njra-btn {
@@ -228,10 +262,8 @@
         ];
 
         // --- JSON CLEANER HELPER ---
-        // This fixes the "failed to save" issue by stripping Markdown wrappers
         const cleanAndParseJSON = (text) => {
             let cleanText = text.trim();
-            // Remove markdown code blocks if present
             if (cleanText.startsWith("```json")) {
                 cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "");
             } else if (cleanText.startsWith("```")) {
@@ -271,7 +303,6 @@
                                 setStatus(""); 
                             }, (error) => { console.error("DB Error:", error); setStatus("Error: " + error.message); });
                             
-                            // Fetch Last Updated Timestamp
                             const metaRef = window.doc(window.db, 'metadata', 'system');
                             window.onSnapshot(metaRef, (doc) => {
                                 if(doc.exists()) setLastUpdated(doc.data().lastUpdated);
@@ -363,7 +394,6 @@
                         let exists = false;
                         let existingId = null;
                         
-                        // Basic Validation
                         if (!item.title || !item.content) {
                             console.error("Skipping invalid item:", item);
                             continue; 
@@ -447,11 +477,10 @@
                     }
                 }
                 
-                // AUTOMATICALLY SAVE TO DATABASE
                 if(combinedJson.length > 0) {
                     await saveBatchToDB(combinedJson);
                 } else {
-                    alert("AI processing returned no data. Check your files.");
+                    alert("No valid policies were generated. Check your files.");
                     setIsProcessing(false);
                     setStatus("");
                 }
@@ -481,11 +510,9 @@
                         }
                     `;
                     const data = await callAI(prompt);
-                    // USE CLEANER HERE
                     const content = cleanAndParseJSON(data.choices[0].message.content);
                     const items = Array.isArray(content) ? content : [content];
                     
-                    // AUTOMATICALLY SAVE
                     await saveBatchToDB(items);
                     setNewPolicyTopic("");
                 } catch (err) { 
@@ -537,7 +564,7 @@
                         </div>
 
                         {/* Controls */}
-                        <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2">
+                        <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2 njra-mobile-stack">
                             <h2 className="text-lg font-bold text-gray-700 flex items-center">
                                 {selectedForPrint.size > 0 ? (
                                     <button onClick={handleBatchPrint} className="njra-btn njra-btn-primary animate-bounce">
@@ -547,7 +574,7 @@
                                     <span>Table of Contents</span>
                                 )}
                             </h2>
-                            <div className="flex bg-white p-1 rounded-md border border-gray-300 shadow-sm">
+                            <div className="flex bg-white p-1 rounded-md border border-gray-300 shadow-sm njra-mobile-stack">
                                 <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded text-sm font-medium flex items-center transition-all ${viewMode === 'list' ? 'bg-njra-50 text-njra-500' : 'text-gray-400 hover:text-gray-600'}`}><i className="fas fa-list"></i></button>
                                 <button onClick={() => setViewMode('grid')} className={`px-3 py-1 rounded text-sm font-medium flex items-center transition-all ${viewMode === 'grid' ? 'bg-njra-50 text-njra-500' : 'text-gray-400 hover:text-gray-600'}`}><i className="fas fa-th-large"></i></button>
                             </div>
@@ -573,7 +600,7 @@
                                                         <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-pointer">{policy.code || '-'}</td>
                                                         <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 text-sm text-gray-900 font-medium cursor-pointer">{policy.title}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                                            <div className="flex justify-end gap-2">
+                                                            <div className="flex justify-end gap-2 njra-mobile-stack">
                                                                 <button onClick={() => onSelectPolicy(policy)} className="text-gray-500 hover:text-njra-500 font-bold px-2 py-1" title="View Policy"><i className="fas fa-eye"></i></button>
                                                                 <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3" title="Take Competency"><i className="fas fa-graduation-cap mr-1"></i> Quiz</button>
                                                             </div>
@@ -670,6 +697,9 @@
                         date: new Date().toLocaleDateString(),
                         user_name: userName,
                         user_email: userEmail,
+                        // Provide a formatted HTML string if the template accepts a {{{message}}} variable
+                        message: "", // Placeholder if template needs it
+                        // You can map other vars here if your template expects them
                     };
 
                     emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
@@ -751,7 +781,7 @@
                 <div className="min-h-[600px] flex flex-col w-full njra-inner-content">
                     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print w-full rounded-b-lg">
                         <div className="px-4 py-4">
-                            <div className="flex justify-between items-center w-full">
+                            <div className="flex justify-between items-center w-full njra-mobile-stack">
                                 <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
                                     <span className="text-2xl mr-2 text-njra-500"><i className="fas fa-lungs"></i></span>
                                     <span className="text-xl font-bold text-njra-900">NJ Respiratory Policy Portal</span>
