@@ -21,6 +21,9 @@
     <!-- Mammoth.js (Reads Word Docs) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
     <!-- Firebase Connection -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -68,6 +71,15 @@
     </script>
 
     <script>
+        // --- EMAILJS CONFIGURATION ---
+        const EMAILJS_SERVICE_ID = "service_e8rbn3f";   
+        const EMAILJS_TEMPLATE_ID = "template_tnqja7a"; 
+        const EMAILJS_PUBLIC_KEY = "I-fs7ljzMeCgNUEGJ"; 
+
+        (function(){
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        })();
+
         tailwind.config = {
             corePlugins: { preflight: false }, 
             theme: {
@@ -126,6 +138,10 @@
         }
         .njra-btn-primary:hover {
             background-color: #942626 !important;
+        }
+        .njra-btn-primary:disabled {
+            background-color: #f87171 !important;
+            cursor: not-allowed;
         }
 
         .njra-btn-secondary {
@@ -211,11 +227,9 @@
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
             const [uploadQueue, setUploadQueue] = useState([]); 
-            const [processedData, setProcessedData] = useState([]);
             const [newPolicyTopic, setNewPolicyTopic] = useState("");
 
             useEffect(() => {
-                setLastUpdated(new Date().toLocaleString());
                 const init = async () => {
                     setTimeout(() => { if(status === "Connecting...") setStatus("Connecting..."); }, 2000);
                     try {
@@ -320,7 +334,11 @@
                         let exists = false;
                         let existingId = null;
                         
-                        if (!item.title || !item.content) continue;
+                        // Basic Validation
+                        if (!item.title || !item.content) {
+                            console.error("Skipping invalid item:", item);
+                            continue; 
+                        }
 
                         if (item.code) {
                             const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
@@ -336,14 +354,20 @@
                             addedCount++; 
                         }
                     } catch (dbErr) {
-                        console.error("DB Save Error:", dbErr);
-                        alert("Failed to save policy: " + item.title);
+                        console.error("DB Save Error for " + item.title, dbErr);
+                        alert("Failed to save policy: " + item.title + "\nError: " + dbErr.message);
                     }
                 }
-                await updateSystemTimestamp();
+                
+                if (addedCount > 0 || updatedCount > 0) {
+                    await updateSystemTimestamp();
+                    alert(`Success!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
+                } else {
+                    alert("No valid policies were generated to save.");
+                }
+                
                 setStatus("");
                 setIsProcessing(false);
-                alert(`Complete!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
             };
 
             const processQueue = async () => {
@@ -377,12 +401,30 @@
                             Here is the raw text: ${rawText}
                         `;
                         const data = await callAI(prompt);
-                        const content = JSON.parse(data.choices[0].message.content);
-                        combinedJson.push(content.policies ? content.policies[0] : (Array.isArray(content) ? content[0] : content));
-                    } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
+                        let content = JSON.parse(data.choices[0].message.content);
+                        
+                        // Handle AI wrapper variations
+                        let items = [];
+                        if (content.policies) items = content.policies;
+                        else if (Array.isArray(content)) items = content;
+                        else items = [content];
+
+                        combinedJson.push(...items);
+
+                    } catch (err) { 
+                        console.error(err); 
+                        alert(`Error processing ${file.name}: ${err.message}`); 
+                    }
                 }
                 
-                await saveBatchToDB(combinedJson);
+                // AUTOMATICALLY SAVE TO DATABASE
+                if(combinedJson.length > 0) {
+                    await saveBatchToDB(combinedJson);
+                } else {
+                    alert("AI processing returned no data. Check your files.");
+                    setIsProcessing(false);
+                    setStatus("");
+                }
                 setUploadQueue([]); 
             };
 
@@ -410,13 +452,18 @@
                     `;
                     const data = await callAI(prompt);
                     const content = JSON.parse(data.choices[0].message.content);
-                    const policyItem = content.policies ? content.policies[0] : (Array.isArray(content) ? content[0] : content);
+                    // Handle potential array wrapper
+                    const items = Array.isArray(content) ? content : [content];
                     
-                    await saveBatchToDB([policyItem]);
+                    // AUTOMATICALLY SAVE
+                    await saveBatchToDB(items);
                     setNewPolicyTopic("");
-                } catch (err) { console.error(err); alert(`Generation Error: ${err.message}`); }
-                
-                setIsProcessing(false);
+                } catch (err) { 
+                    console.error(err); 
+                    alert(`Generation Error: ${err.message}`); 
+                    setIsProcessing(false);
+                    setStatus("");
+                }
             };
 
             const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
@@ -566,7 +613,10 @@
                 const [showResult, setShowResult] = useState(false);
                 const [score, setScore] = useState(0);
                 const [userName, setUserName] = useState("");
+                const [userEmail, setUserEmail] = useState(""); 
                 const questions = policy.questions || [];
+                const [isSendingEmail, setIsSendingEmail] = useState(false);
+                const [emailSent, setEmailSent] = useState(false);
                 
                 if(questions.length === 0) return (<div className="max-w-2xl mx-auto mt-8 bg-white p-8 rounded border border-gray-300 shadow-md text-center"><div className="text-gray-400 text-4xl mb-4"><i className="fas fa-clipboard-list"></i></div><h2 className="text-xl font-bold text-gray-700">No Competency Data</h2><button onClick={()=>setView('detail')} className="mt-6 njra-btn njra-btn-secondary">Return</button></div>);
 
@@ -578,10 +628,34 @@
                 };
                 const isPassed = (score / questions.length) >= 0.8;
                 const percent = Math.round((score / questions.length) * 100);
-                const sendEmail = () => {
-                    const body = `Employee: ${userName}%0D%0APolicy: ${policy.title}%0D%0AScore: ${percent}%`;
-                    window.open(`mailto:admin@seeNJRA.com?subject=Competency Result&body=${body}`);
+                
+                // NEW: Updated Email Logic
+                const handleSendEmail = () => {
+                    if (!userName || !userEmail) return;
+                    setIsSendingEmail(true);
+                    
+                    const templateParams = {
+                        policy_title: policy.title,
+                        score: percent,
+                        date: new Date().toLocaleDateString(),
+                        user_name: userName,
+                        user_email: userEmail,
+                        // Provide a formatted HTML string if the template accepts a {{{message}}} variable
+                        message: "", // Placeholder if template needs it
+                        // You can map other vars here if your template expects them
+                    };
+
+                    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+                        .then(() => {
+                            setEmailSent(true);
+                            setIsSendingEmail(false);
+                        }, (err) => {
+                            alert("Failed to send email. Please check console for details.");
+                            console.error("EmailJS Error:", err);
+                            setIsSendingEmail(false);
+                        });
                 };
+                
                 const handlePrint = () => { window.print(); }
 
                 return (
@@ -612,7 +686,29 @@
                                     );
                                 })}
                             </div>
-                            <div className="mt-10 pt-6 border-t border-gray-200 no-print">{!showResult ? (<div className="flex justify-between items-center"><div className="text-sm text-gray-500">{Object.keys(userAnswers).length} / {questions.length} answered</div><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed' : 'njra-btn-primary'}`}>Submit</button></div>) : (<div className="space-y-4 bg-gray-50 p-6 rounded-lg"><input className="border border-gray-300 p-3 w-full rounded" placeholder="Enter Name" value={userName} onChange={e=>setUserName(e.target.value)} /><div className="flex gap-3"><button onClick={sendEmail} disabled={!userName} className="njra-btn njra-btn-primary flex-1">Email Result</button>{isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary flex-1">Print Certificate</button>}<button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button></div></div>)}</div>
+                            <div className="mt-10 pt-6 border-t border-gray-200 no-print">{!showResult ? (<div className="flex justify-between items-center"><div className="text-sm text-gray-500">{Object.keys(userAnswers).length} / {questions.length} answered</div><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300 cursor-not-allowed' : 'njra-btn-primary'}`}>Submit</button></div>) : (
+                                <div className="space-y-4 bg-gray-50 p-6 rounded-lg">
+                                    <h4 className="font-bold text-gray-900">Next Steps:</h4>
+                                    <div className="flex flex-col gap-2">
+                                        <input className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-njra-500 outline-none bg-white" placeholder="Enter Your Full Name" value={userName} onChange={e=>setUserName(e.target.value)} disabled={emailSent} />
+                                        <input className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-njra-500 outline-none bg-white" placeholder="Enter Your Email" value={userEmail} onChange={e=>setUserEmail(e.target.value)} disabled={emailSent} />
+                                    </div>
+                                    <div className="flex gap-3 flex-col sm:flex-row">
+                                        {emailSent ? (
+                                            <button disabled className="njra-btn bg-green-600 text-white flex-1 cursor-default">
+                                                <i className="fas fa-check mr-2"></i> Email Sent!
+                                            </button>
+                                        ) : (
+                                            <button onClick={handleSendEmail} disabled={!userName || !userEmail || isSendingEmail} className="njra-btn njra-btn-primary flex-1">
+                                                <i className={`fas ${isSendingEmail ? 'fa-spinner fa-spin' : 'fa-paper-plane'} mr-2`}></i> {isSendingEmail ? 'Sending...' : 'Submit & Email'}
+                                            </button>
+                                        )}
+                                        
+                                        {isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary flex-1"><i className="fas fa-certificate mr-2"></i> Print Certificate</button>}
+                                        <button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button>
+                                    </div>
+                                </div>
+                            )}</div>
                         </div>
                     </div>
                 );
@@ -681,41 +777,28 @@
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                    {/* UPLOAD DOCS */}
-                                    <div className="border border-gray-300 p-6 rounded flex flex-col gap-4 bg-white shadow-sm">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-njra-900 mb-1">1. Upload Documents</h3>
-                                            <p className="text-xs text-gray-500">Select multiple .docx files to auto-generate policies.</p>
+                                <div className="flex justify-start gap-4 mb-8">
+                                    <div className="border border-gray-300 p-4 rounded flex items-center gap-4 bg-gray-50 w-full md:w-auto">
+                                        <div className="text-xs text-gray-500 flex flex-col">
+                                            <span className="font-bold text-gray-700">Magic Upload (AI)</span>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <input type="password" placeholder="OpenAI Key" className="border p-1 rounded w-24 text-xs" value={apiKey} onChange={handleApiKeyChange} />
+                                                {apiKey && <button onClick={resetApiKey} className="text-red-500 hover:text-red-700"><i className="fas fa-times"></i></button>}
+                                                {apiKey && <button onClick={testOpenAIConnection} className="text-green-600 hover:text-green-800 text-xs underline">Test Connection</button>}
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <input type="password" placeholder="Paste OpenAI Key Here" className="border p-2 rounded text-xs w-full" value={apiKey} onChange={handleApiKeyChange} />
-                                            {apiKey && <button onClick={testOpenAIConnection} className="text-green-600 text-xs font-bold hover:underline w-20">Test Key</button>}
-                                        </div>
-                                        <label className={`njra-btn njra-btn-secondary cursor-pointer w-full text-center justify-center ${isProcessing ? 'opacity-50' : ''}`}>
-                                            {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-file-upload mr-2"></i>}
-                                            <span>{isProcessing ? 'Analyzing...' : 'Select Word Files'}</span>
+                                        <label className={`njra-btn njra-btn-secondary cursor-pointer text-sm ${isProcessing ? 'opacity-50' : ''}`}>
+                                            {isProcessing ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-magic mr-2"></i>}
+                                            <span>{isProcessing ? 'Processing...' : 'Upload Word Docs'}</span>
                                             <input type="file" accept=".docx" multiple className="hidden" onChange={handleFileSelect} disabled={isProcessing} />
                                         </label>
-                                    </div>
-
-                                    {/* CREATE NEW */}
-                                    <div className="border border-gray-300 p-6 rounded flex flex-col gap-4 bg-white shadow-sm">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-njra-900 mb-1">2. Create from Topic</h3>
-                                            <p className="text-xs text-gray-500">Type a topic and let AI write the policy for you.</p>
-                                        </div>
-                                        <div className="flex gap-2 mt-auto">
-                                            <input type="text" className="border p-2 rounded flex-grow text-sm" placeholder="e.g. Hand Hygiene" value={newPolicyTopic} onChange={e=>setNewPolicyTopic(e.target.value)} />
-                                            <button onClick={createFromTopic} disabled={isProcessing} className="njra-btn njra-btn-primary"><i className="fas fa-magic"></i></button>
-                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Upload Queue Section */}
                                 {uploadQueue.length > 0 && !isProcessing && (
                                     <div className="border-t border-gray-200 pt-6 mb-6">
-                                        <h4 className="font-bold text-gray-800 mb-2">Ready to Process ({uploadQueue.length})</h4>
+                                        <h4 className="font-bold text-gray-800 mb-2">Selected Documents ({uploadQueue.length})</h4>
                                         <ul className="mb-4 space-y-2">
                                             {uploadQueue.map((file, idx) => (
                                                 <li key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-gray-200">
