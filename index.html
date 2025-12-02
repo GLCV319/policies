@@ -159,6 +159,31 @@
         .policy-content h2 { color: #444444; margin-top: 1.5em; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
         .policy-content strong { font-weight: 700; color: #222; }
 
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            #njra-app-root {
+                border-radius: 0;
+                border: none;
+            }
+            .njra-header-flex {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            .njra-header-flex button {
+                width: 100%;
+            }
+            .njra-search-bar {
+                padding-left: 2.5rem !important; 
+            }
+            .policy-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .admin-actions {
+                flex-direction: column;
+            }
+        }
+
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -213,6 +238,7 @@
             const [uploadQueue, setUploadQueue] = useState([]); 
 
             useEffect(() => {
+                setLastUpdated(new Date().toLocaleString());
                 const init = async () => {
                     setTimeout(() => { if(status === "Connecting...") setStatus("Connecting..."); }, 2000);
                     try {
@@ -240,13 +266,12 @@
                 init();
             }, []);
 
-            // --- UPDATE TIMESTAMP ---
+            // --- UTILS ---
             const updateSystemTimestamp = async () => {
                 const now = new Date().toLocaleString();
                 await window.setDoc(window.doc(window.db, 'metadata', 'system'), { lastUpdated: now });
             };
 
-            // --- SELECTION HANDLER ---
             const togglePrintSelection = (policyId) => {
                 const newSet = new Set(selectedForPrint);
                 if (newSet.has(policyId)) newSet.delete(policyId);
@@ -302,8 +327,7 @@
                 if (uploadQueue.length === 0) return;
                 setIsProcessing(true);
                 
-                let successCount = 0;
-                let updateCount = 0;
+                let combinedJson = [];
 
                 for (let i = 0; i < uploadQueue.length; i++) {
                     const file = uploadQueue[i];
@@ -358,15 +382,22 @@
 
                         // SAVE DIRECTLY TO DB
                         for(let item of items) {
+                            combinedJson.push(item); 
+                            
                             let exists = false;
                             let existingId = null;
+                            
                             if (item.code) {
                                 const q = window.query(window.collection(window.db, 'policies'), window.where('code', '==', item.code));
                                 const snapshot = await window.getDocs(q);
                                 if (!snapshot.empty) { exists = true; existingId = snapshot.docs[0].id; }
                             }
-                            if (exists) { await window.updateDoc(window.doc(window.db, 'policies', existingId), item); updateCount++; } 
-                            else { await window.addDoc(window.collection(window.db, 'policies'), item); successCount++; }
+                            
+                            if (exists) { 
+                                await window.updateDoc(window.doc(window.db, 'policies', existingId), item); 
+                            } else { 
+                                await window.addDoc(window.collection(window.db, 'policies'), item); 
+                            }
                         }
 
                     } catch (err) { console.error(err); alert(`Error processing ${file.name}: ${err.message}`); }
@@ -376,7 +407,7 @@
                 setStatus("");
                 setIsProcessing(false);
                 setUploadQueue([]); 
-                alert(`Upload Complete!\nAdded: ${successCount}\nUpdated: ${updateCount}`);
+                alert(`Upload Complete! Automatically saved ${combinedJson.length} policies.`);
             };
 
             const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
@@ -415,12 +446,12 @@
                             <p className="text-gray-500 mb-6">Search respiratory therapy protocols and competencies.</p>
                             <div className="max-w-xl mx-auto relative">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400"><i className="fas fa-search text-lg"></i></div>
-                                <input type="text" className="block w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-full leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:border-njra-500 focus:ring-1 focus:ring-njra-500 transition-all text-base shadow-sm" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                <input type="text" className="block w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-full leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:border-njra-500 focus:ring-1 focus:ring-njra-500 transition-all text-base shadow-sm njra-search-bar" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                         </div>
 
                         {/* Controls */}
-                        <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2">
+                        <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2 njra-header-flex">
                             <h2 className="text-lg font-bold text-gray-700 flex items-center">
                                 {selectedForPrint.size > 0 ? (
                                     <button onClick={handleBatchPrint} className="njra-btn njra-btn-primary animate-bounce">
@@ -673,7 +704,7 @@
                                         </ul>
                                         <div className="flex gap-3">
                                             <button onClick={() => setUploadQueue([])} className="njra-btn njra-btn-secondary">Clear All</button>
-                                            <button onClick={processFiles} className="njra-btn njra-btn-primary">Process Files (AI)</button>
+                                            <button onClick={processFiles} className="njra-btn njra-btn-primary">Process & Save</button>
                                         </div>
                                     </div>
                                 )}
