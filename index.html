@@ -1,3 +1,7 @@
+
++6
+-657
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -113,6 +117,7 @@
           colors: {
             njra: { 50: '#fdf2f2', 100: '#fde8e8', 500: '#af3030', 600: '#942626', 700: '#7f1d1d', 900: '#444444' },
             quik: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0f766e', 600: '#0d5f58' }
+            quik: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0f766e', 600: '#0d5f58' },
           },
           animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
           keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
@@ -121,6 +126,10 @@
     </style>
       }
     }
+          keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } },
+        },
+      },
+    };
   </script>
 </head>
 <body>
@@ -689,5 +698,6 @@
     </script>
   <script src="src/config.sample.js"></script>
   <script type="text/babel" data-presets="env,react" src="src/app.jsx"></script>
+  <script type="text/babel" data-type="module" src="./src/app.jsx"></script>
 </body>
 </html>
