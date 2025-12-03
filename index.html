@@ -238,7 +238,7 @@
             return JSON.parse(cleanText);
         };
 
-        // --- AI SYSTEM PROMPT (UPDATED WITH YOUR GUIDELINES) ---
+        // --- AI SYSTEM PROMPT ---
         const SYSTEM_PROMPT = `
             You are an expert Respiratory Therapy consultant for Long-Term Care (LTC) facilities.
             
@@ -282,12 +282,16 @@
             const [status, setStatus] = useState("Connecting...");
             const [selectedForPrint, setSelectedForPrint] = useState(new Set()); 
             const [lastUpdated, setLastUpdated] = useState("Loading...");
+            const [adminSearch, setAdminSearch] = useState("");
             
             // AI
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
             const [isProcessing, setIsProcessing] = useState(false);
             const [uploadQueue, setUploadQueue] = useState([]); 
             const [newPolicyTopic, setNewPolicyTopic] = useState("");
+
+            // Admin Preview Modal
+            const [adminPreviewPolicy, setAdminPreviewPolicy] = useState(null);
 
             useEffect(() => {
                 setLastUpdated(new Date().toLocaleString());
@@ -426,7 +430,7 @@
                     await updateSystemTimestamp();
                     alert(`Success!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
                 } else {
-                    alert("No valid policies were generated to save.");
+                    alert("No valid policies were generated to save. Check API response.");
                 }
                 
                 setStatus("");
@@ -494,14 +498,6 @@
                 }
             };
 
-            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
-            
-            const handleDelete = async (id) => {
-                if(!confirm("Delete this policy permanently?")) return;
-                try { await window.deleteDoc(window.doc(window.db, 'policies', id)); await updateSystemTimestamp(); } 
-                catch(e) { alert("Delete failed: " + e.message); }
-            };
-
             const runPolicyUpdate = async (policy) => {
                 if (!apiKey) { alert("Please enter an OpenAI API Key first."); return; }
                 if (!confirm(`Are you sure you want to AI-update "${policy.title}"? This will overwrite the current content.`)) return;
@@ -539,6 +535,14 @@
                 
                 setIsProcessing(false);
                 setStatus("");
+            };
+
+            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
+            
+            const handleDelete = async (id) => {
+                if(!confirm("Delete this policy permanently?")) return;
+                try { await window.deleteDoc(window.doc(window.db, 'policies', id)); await updateSystemTimestamp(); } 
+                catch(e) { alert("Delete failed: " + e.message); }
             };
 
             // --- COMPONENTS ---
@@ -707,6 +711,33 @@
                         date: new Date().toLocaleDateString(),
                         user_name: userName,
                         user_email: userEmail,
+                        // Provide a formatted HTML string if the template accepts a {{{message}}} variable
+                        message_html: `
+                            <div style="font-family: system-ui, sans-serif, Arial; font-size: 12px">
+                                <div>
+                                    A new competency has been submitted. Details are as follows:<br><br>
+                                    Employee: ${userName}<br>
+                                    Email: ${userEmail}<br>
+                                    Policy: ${policy.title}<br>
+                                    Score: ${percent}%<br>
+                                    Date: ${new Date().toLocaleDateString()}
+                                </div>
+                                <div style="margin-top: 20px; padding: 15px 0; border-width: 1px 0; border-style: dashed; border-color: lightgrey;">
+                                    <table role="presentation">
+                                        <tr>
+                                            <td style="vertical-align: top">
+                                                <div style="padding: 6px 10px; margin: 0 10px; background-color: aliceblue; border-radius: 5px; font-size: 26px;" role="img">👤</div>
+                                            </td>
+                                            <td style="vertical-align: top">
+                                                <div style="color: #2c3e50; font-size: 16px"><strong>${userName}</strong></div>
+                                                <div style="color: #cccccc; font-size: 13px">${new Date().toLocaleString()}</div>
+                                                <p style="font-size: 16px">Competency Quiz for ${policy.title} completed with score ${percent}%.</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        `
                     };
 
                     emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
@@ -758,9 +789,16 @@
                                         <input className="border border-gray-300 p-3 w-full rounded focus:ring-2 focus:ring-njra-500 outline-none bg-white" placeholder="Enter Your Email" value={userEmail} onChange={e=>setUserEmail(e.target.value)} disabled={emailSent} />
                                     </div>
                                     <div className="flex gap-3 flex-col sm:flex-row">
-                                        <button onClick={handleSendEmail} disabled={!userName || !userEmail || isSendingEmail} className="njra-btn njra-btn-primary flex-1">
-                                            <i className={`fas ${isSendingEmail ? 'fa-spinner fa-spin' : 'fa-paper-plane'} mr-2`}></i> {isSendingEmail ? 'Sending...' : 'Submit & Email'}
-                                        </button>
+                                        {emailSent ? (
+                                            <button disabled className="njra-btn bg-green-600 text-white flex-1 cursor-default">
+                                                <i className="fas fa-check mr-2"></i> Email Sent!
+                                            </button>
+                                        ) : (
+                                            <button onClick={handleSendEmail} disabled={!userName || !userEmail || isSendingEmail} className="njra-btn njra-btn-primary flex-1">
+                                                <i className={`fas ${isSendingEmail ? 'fa-spinner fa-spin' : 'fa-paper-plane'} mr-2`}></i> {isSendingEmail ? 'Sending...' : 'Submit & Email'}
+                                            </button>
+                                        )}
+                                        
                                         {isPassed && <button onClick={()=>window.print()} className="njra-btn njra-btn-secondary flex-1"><i className="fas fa-certificate mr-2"></i> Print Certificate</button>}
                                         <button onClick={()=>setView('home')} className="njra-btn njra-btn-outline flex-1">Close</button>
                                     </div>
@@ -834,22 +872,18 @@
                                     <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin Dashboard</button>
                                 </div>
                                 
-                                <div className="flex flex-col gap-4 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-njra-900">1. Configure AI</h3>
-                                            <p className="text-xs text-gray-500">Required for automation.</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <input type="password" placeholder="Paste OpenAI Key Here" className="border p-2 rounded text-xs w-full max-w-md" value={apiKey} onChange={handleApiKeyChange} />
-                                            {apiKey && (
-                                                <div className="flex gap-2">
-                                                    <button onClick={testOpenAIConnection} className="text-green-600 text-xs font-bold hover:underline">Test</button>
-                                                    <button onClick={resetApiKey} className="text-red-600 text-xs font-bold hover:underline">Reset</button>
-                                                </div>
-                                            )}
-                                        </div>
+                                <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-8">
+                                    <h3 className="font-bold text-lg text-njra-900 mb-4">1. Configure Services</h3>
+                                    <div className="flex items-center gap-2">
+                                        <input type="password" placeholder="Paste OpenAI Key Here" className="border p-2 rounded text-xs w-full max-w-md" value={apiKey} onChange={handleApiKeyChange} />
+                                        {apiKey && (
+                                            <div className="flex gap-2">
+                                                <button onClick={testOpenAIConnection} className="text-green-600 text-xs font-bold hover:underline">Test</button>
+                                                <button onClick={resetApiKey} className="text-red-600 text-xs font-bold hover:underline">Reset</button>
+                                            </div>
+                                        )}
                                     </div>
+                                    <p className="text-xs text-gray-500 mt-2">Required for AI document processing.</p>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -899,34 +933,81 @@
                                 )}
 
                                 <div>
-                                    <h3 className="font-bold mb-4 text-njra-900 border-b pb-2">Database Content ({policies.length})</h3>
-                                    <ul>
-                                        {policies.sort((a,b) => (a.code||"").localeCompare(b.code||"")).map(p => (
-                                            <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2 flex-wrap gap-2">
-                                                <div className="flex flex-col">
-                                                    <span className="text-gray-800 font-medium">
-                                                        <span className="font-mono text-xs text-gray-500 mr-2 w-16 inline-block">{p.code || '-'}</span>
-                                                        {p.title}
-                                                    </span>
-                                                    <div className="flex gap-2 mt-1">
-                                                        <button onClick={() => runPolicyUpdate(p)} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 bg-blue-50 px-2 py-1 rounded flex items-center gap-1" title="Run AI Update">
-                                                            <i className="fas fa-sync-alt"></i> Update
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 ml-auto">
-                                                    <select 
-                                                        className="text-xs border rounded p-1 max-w-[140px] bg-white"
-                                                        value={p.category || "Uncategorized"}
-                                                        onChange={(e) => updateDbCategory(p.id, e.target.value)}
-                                                    >
-                                                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                                    </select>
-                                                    <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete"><i className="fas fa-trash"></i></button>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    <h3 className="font-bold mb-4 text-njra-900 border-b pb-2 flex justify-between items-center">
+                                        Database Content ({policies.length})
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search Policies..." 
+                                            className="text-sm font-normal border p-1 rounded w-48"
+                                            value={adminSearch}
+                                            onChange={(e) => setAdminSearch(e.target.value)}
+                                        />
+                                    </h3>
+                                    <div className="max-h-[500px] overflow-y-auto">
+                                        <ul>
+                                            {(() => {
+                                                const filtered = policies.filter(p => 
+                                                    p.title.toLowerCase().includes(adminSearch.toLowerCase()) || 
+                                                    (p.code && p.code.toLowerCase().includes(adminSearch.toLowerCase()))
+                                                );
+
+                                                const sortedPolicies = filtered.sort((a, b) => {
+                                                    const codeA = a.code || "";
+                                                    const codeB = b.code || "";
+                                                    return codeA.localeCompare(codeB) || a.title.localeCompare(b.title);
+                                                });
+                                                
+                                                return sortedPolicies.map(p => (
+                                                    <li key={p.id} className="flex justify-between items-center py-3 border-b hover:bg-gray-50 px-2 flex-wrap gap-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-gray-800 font-medium">
+                                                                <span className="font-mono text-xs text-gray-500 mr-2 w-16 inline-block">{p.code || '-'}</span>
+                                                                {p.title}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        {/* Admin Modal Preview */}
+                                                        {adminPreviewPolicy && adminPreviewPolicy.id === p.id && (
+                                                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                                                <div className="bg-white w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 rounded-lg shadow-xl">
+                                                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                                                        <h3 className="font-bold text-lg">Preview: {p.title}</h3>
+                                                                        <button onClick={() => setAdminPreviewPolicy(null)} className="text-gray-500 hover:text-gray-800"><i className="fas fa-times"></i></button>
+                                                                    </div>
+                                                                    <div className="prose text-sm text-gray-700 mb-6" dangerouslySetInnerHTML={{__html: p.content}}></div>
+                                                                    <h4 className="font-bold border-t pt-4 mt-4">Competency Quiz</h4>
+                                                                    <ul className="list-decimal pl-5 text-sm">
+                                                                        {p.questions && p.questions.map((q, idx) => (
+                                                                            <li key={idx} className="mb-2">{q.text}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex items-center gap-2 ml-auto">
+                                                            <div className="flex gap-2 mr-4">
+                                                                <button onClick={() => setAdminPreviewPolicy(p)} className="text-gray-500 hover:text-njra-500 p-2" title="Quick View">
+                                                                    <i className="fas fa-eye"></i>
+                                                                </button>
+                                                                <button onClick={() => runPolicyUpdate(p)} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 bg-blue-50 px-2 py-1 rounded flex items-center gap-1" title="Run AI Update">
+                                                                    <i className="fas fa-sync-alt"></i> Update
+                                                                </button>
+                                                            </div>
+                                                            <select 
+                                                                className="text-xs border rounded p-1 max-w-[140px] bg-white"
+                                                                value={p.category || "Uncategorized"}
+                                                                onChange={(e) => updateDbCategory(p.id, e.target.value)}
+                                                            >
+                                                                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                            </select>
+                                                            <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2" title="Delete"><i className="fas fa-trash"></i></button>
+                                                        </div>
+                                                    </li>
+                                                ));
+                                            })()}
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         )}
