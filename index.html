@@ -55,7 +55,9 @@
                     colors: {
                         njra: { 50: '#fdf2f2', 100: '#fde8e8', 500: '#af3030', 600: '#942626', 900: '#444444' },
                         quik: { 500: '#0f766e', 600: '#0d5f58', 50: '#f0fdfa' }
-                    }
+                    },
+                    animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
+                    keyframes: { fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } } }
                 }
             }
         }
@@ -63,7 +65,7 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
-        #njra-app-root { font-family: 'Lato', sans-serif; background-color: #f8fafc; color: #444; line-height: 1.5; width: 100%; }
+        #njra-app-root { font-family: 'Lato', sans-serif; background-color: #f8fafc; color: #444; line-height: 1.5; width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
         
         .njra-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 700; cursor: pointer; transition: 0.2s; border: none; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .njra-btn-primary { background-color: #af3030 !important; color: white !important; }
@@ -98,12 +100,20 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+        const CATEGORIES = ["Emergency Procedures", "Clinical Care", "Equipment Management", "Patient Assessment", "Infection Control", "Documentation", "Administrative", "Uncategorized"];
         
         // --- DATA & AI HELPERS ---
         const cleanAndParseJSON = (text) => {
             let cleanText = text.trim().replace(/^```json/, "").replace(/^```/, "").replace(/```$/, "");
             return JSON.parse(cleanText);
         };
+
+        const SYSTEM_PROMPT = `
+            You are an expert Respiratory Therapy consultant for Long-Term Care (LTC) facilities.
+            OBJECTIVE: Create/Update a policy.
+            GUIDELINES: Professional tone, HTML formatting (<h2>, <p>, <ul>), Compliance-forward.
+            OUTPUT FORMAT (JSON): { "title": "...", "code": "...", "category": "...", "content": "HTML...", "questions": [{ "text": "...", "options": ["A","B"], "correctIndex": 0 }] }
+        `;
 
         const App = () => {
             const [view, setView] = useState('home');
@@ -112,17 +122,19 @@
             
             // Core States
             const [selectedPolicy, setSelectedPolicy] = useState(null);
-            const [activeBundle, setActiveBundle] = useState(null); 
-            
-            // Course Mode State
-            const [courseState, setCourseState] = useState({ active: false, index: 0, mode: 'read' }); // mode: 'read' | 'quiz' | 'summary'
-            
+            const [activeBundle, setActiveBundle] = useState(null); // For Course Mode OR Filter
+            const [courseState, setCourseState] = useState({ active: false, index: 0, mode: 'read' }); 
+            const [selectedForPrint, setSelectedForPrint] = useState(new Set()); 
+
             // Admin/System
             const [isAdmin, setIsAdmin] = useState(false);
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [adminPass, setAdminPass] = useState("");
             const [status, setStatus] = useState("Connecting...");
             const [apiKey, setApiKey] = useState(localStorage.getItem('njra_openai_key') || "");
+            const [uploadQueue, setUploadQueue] = useState([]);
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [newPolicyTopic, setNewPolicyTopic] = useState("");
             const [lastUpdated, setLastUpdated] = useState("Loading...");
 
             // INIT
@@ -147,6 +159,36 @@
                 init();
             }, []);
 
+            // --- AI Logic (Restored) ---
+            const callAI = async (userContent) => {
+                const response = await fetch("[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+                    body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: userContent }], response_format: { type: "json_object" } })
+                });
+                if (!response.ok) throw new Error("AI Error");
+                return await response.json();
+            };
+
+            const processQueue = async () => {
+                if (!apiKey) return alert("API Key Required");
+                setIsProcessing(true);
+                try {
+                    for (let file of uploadQueue) {
+                        setStatus(`Processing ${file.name}...`);
+                        const ab = await file.arrayBuffer();
+                        const raw = (await mammoth.extractRawText({ arrayBuffer: ab })).value;
+                        const data = await callAI(`Reformat this policy:\n\n${raw}`);
+                        const json = cleanAndParseJSON(data.choices[0].message.content);
+                        const items = json.policies || (Array.isArray(json) ? json : [json]);
+                        for(let item of items) await window.addDoc(window.collection(window.db, 'policies'), item);
+                    }
+                    alert("Processing Complete!");
+                    setUploadQueue([]);
+                } catch(e) { alert("Error: " + e.message); }
+                setIsProcessing(false); setStatus("");
+            };
+
             // --- COURSE PLAYER LOGIC ---
             const startCourse = (bundle) => {
                 setActiveBundle(bundle);
@@ -156,25 +198,14 @@
 
             const handleCourseStepComplete = (passed) => {
                 if (!passed) return; 
-                
-                // Get current policies in bundle
                 const bundlePolicies = policies.filter(p => activeBundle.policyIds.includes(p.id));
-                
                 if (courseState.index + 1 < bundlePolicies.length) {
-                    // Move to next policy
                     setCourseState({ ...courseState, index: courseState.index + 1, mode: 'read' });
                     window.scrollTo(0, 0);
                 } else {
-                    // Course Complete
                     setCourseState({ ...courseState, mode: 'summary' });
                     window.scrollTo(0, 0);
                 }
-            };
-
-            const toggleCourseMode = () => {
-                // Switch between Read and Quiz
-                setCourseState(prev => ({ ...prev, mode: prev.mode === 'read' ? 'quiz' : 'read' }));
-                window.scrollTo(0, 0);
             };
 
             const printInstructorGuide = (bundle) => {
@@ -211,7 +242,6 @@
             const CoursePlayer = () => {
                 const bundlePolicies = policies.filter(p => activeBundle.policyIds.includes(p.id));
                 const currentPolicy = bundlePolicies[courseState.index];
-                const progress = Math.round(((courseState.index) / bundlePolicies.length) * 100);
 
                 if (courseState.mode === 'summary') {
                     return (
@@ -219,39 +249,21 @@
                             <div className="text-6xl mb-4 text-yellow-400"><i className="fas fa-trophy"></i></div>
                             <h1 className="text-3xl font-bold text-njra-500 mb-2">Course Completed!</h1>
                             <p className="text-xl text-gray-600 mb-8">You have successfully completed <strong>{activeBundle.title}</strong>.</p>
-                            
                             <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 inline-block text-left mb-8 w-full max-w-md">
                                 <h3 className="font-bold border-b pb-2 mb-2">Summary of Modules Passed:</h3>
                                 <ul className="space-y-2">
-                                    {bundlePolicies.map((p, i) => (
-                                        <li key={i} className="flex items-center text-green-700">
-                                            <i className="fas fa-check-circle mr-2"></i> {p.title}
-                                        </li>
-                                    ))}
+                                    {bundlePolicies.map((p, i) => (<li key={i} className="flex items-center text-green-700"><i className="fas fa-check-circle mr-2"></i> {p.title}</li>))}
                                 </ul>
                             </div>
-                            
                             <div className="flex justify-center gap-4 no-print">
                                 <button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-certificate mr-2"></i> Print Master Certificate</button>
                                 <button onClick={()=>setView('home')} className="njra-btn njra-btn-secondary">Return Home</button>
                             </div>
-
-                            {/* Hidden Certificate for Print */}
                             <div className="print-only print-cover-page border-8 border-double border-njra-900 p-12">
                                 <div className="text-6xl font-serif font-bold text-njra-500 mb-4">Certificate of Completion</div>
-                                <p className="text-xl mb-8">This certifies that the employee has successfully completed the QuikComp Bundle:</p>
                                 <h2 className="text-4xl font-bold border-b-2 border-black pb-4 mb-4 inline-block">{activeBundle.title}</h2>
-                                <div className="text-left mt-8 w-full max-w-2xl mx-auto">
-                                    <p className="font-bold mb-2">Modules Verified:</p>
-                                    <ul className="list-disc pl-5">
-                                        {bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}
-                                    </ul>
-                                </div>
-                                <div className="mt-auto w-full flex justify-between px-12 pt-12">
-                                    <div className="text-center border-t border-black pt-2 w-64">Employee Signature</div>
-                                    <div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div>
-                                </div>
-                                <div className="text-sm text-gray-400 mt-8">Date: {new Date().toLocaleDateString()}</div>
+                                <div className="text-left mt-8 w-full max-w-2xl mx-auto"><p className="font-bold mb-2">Modules Verified:</p><ul className="list-disc pl-5">{bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}</ul></div>
+                                <div className="mt-auto w-full flex justify-between px-12 pt-12"><div className="text-center border-t border-black pt-2 w-64">Employee Signature</div><div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div></div>
                             </div>
                         </div>
                     );
@@ -259,46 +271,21 @@
 
                 return (
                     <div className="max-w-5xl mx-auto w-full bg-white min-h-screen flex flex-col shadow-xl">
-                        {/* Course Header */}
                         <div className="bg-quik-600 text-white p-4 sticky top-0 z-30 shadow-md">
-                            <div className="flex justify-between items-center mb-2">
-                                <h2 className="font-bold text-lg"><i className="fas fa-layer-group mr-2"></i> {activeBundle.title}</h2>
-                                <button onClick={()=>{if(confirm("Exit course? Progress will be lost.")) setView('home')}} className="text-white/80 hover:text-white"><i className="fas fa-times"></i> Exit</button>
-                            </div>
-                            {/* Progress Bar */}
-                            <div className="w-full bg-quik-900/30 rounded-full h-2.5">
-                                <div className="bg-white h-2.5 rounded-full transition-all duration-500" style={{width: `${((courseState.index)/bundlePolicies.length)*100}%`}}></div>
-                            </div>
-                            <div className="flex justify-between text-xs mt-1 text-white/80">
-                                <span>Module {courseState.index + 1} of {bundlePolicies.length}</span>
-                                <span>{currentPolicy.title}</span>
-                            </div>
+                            <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-lg"><i className="fas fa-layer-group mr-2"></i> {activeBundle.title}</h2><button onClick={()=>{if(confirm("Exit course?")) setView('home')}} className="text-white/80 hover:text-white"><i className="fas fa-times"></i> Exit</button></div>
+                            <div className="w-full bg-quik-900/30 rounded-full h-2.5"><div className="bg-white h-2.5 rounded-full transition-all duration-500" style={{width: `${((courseState.index)/bundlePolicies.length)*100}%`}}></div></div>
+                            <div className="flex justify-between text-xs mt-1 text-white/80"><span>Module {courseState.index + 1} of {bundlePolicies.length}</span><span>{currentPolicy.title}</span></div>
                         </div>
-
-                        {/* Content Area */}
                         <div className="flex-grow p-8 bg-gray-50">
                             <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
                                 <div className="flex justify-between items-center mb-6 border-b pb-4">
                                     <h1 className="text-2xl font-bold text-njra-900">{currentPolicy.title}</h1>
-                                    <div className="flex bg-gray-100 p-1 rounded">
-                                        <button onClick={()=>setCourseState(p=>({...p, mode:'read'}))} className={`px-4 py-1 rounded text-sm font-bold ${courseState.mode==='read' ? 'bg-white shadow text-quik-600' : 'text-gray-500'}`}>Policy</button>
-                                        <button onClick={()=>setCourseState(p=>({...p, mode:'quiz'}))} className={`px-4 py-1 rounded text-sm font-bold ${courseState.mode==='quiz' ? 'bg-white shadow text-quik-600' : 'text-gray-500'}`}>Quiz</button>
-                                    </div>
+                                    <div className="flex bg-gray-100 p-1 rounded"><button onClick={()=>setCourseState(p=>({...p, mode:'read'}))} className={`px-4 py-1 rounded text-sm font-bold ${courseState.mode==='read' ? 'bg-white shadow text-quik-600' : 'text-gray-500'}`}>Policy</button><button onClick={()=>setCourseState(p=>({...p, mode:'quiz'}))} className={`px-4 py-1 rounded text-sm font-bold ${courseState.mode==='quiz' ? 'bg-white shadow text-quik-600' : 'text-gray-500'}`}>Quiz</button></div>
                                 </div>
-
                                 {courseState.mode === 'read' ? (
-                                    <div className="animate-fade-in">
-                                        <div className="policy-content prose max-w-none" dangerouslySetInnerHTML={{__html: currentPolicy.content}}></div>
-                                        <div className="mt-8 pt-6 border-t flex justify-end">
-                                            <button onClick={toggleCourseMode} className="njra-btn njra-btn-quik text-lg px-8">
-                                                Take Competency Quiz <i className="fas fa-arrow-right ml-2"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <div className="animate-fade-in"><div className="policy-content prose max-w-none" dangerouslySetInnerHTML={{__html: currentPolicy.content}}></div><div className="mt-8 pt-6 border-t flex justify-end"><button onClick={()=>setCourseState(p=>({...p, mode:'quiz'}))} className="njra-btn njra-btn-quik text-lg px-8">Take Competency Quiz <i className="fas fa-arrow-right ml-2"></i></button></div></div>
                                 ) : (
-                                    <div className="animate-fade-in">
-                                        <QuizComponent policy={currentPolicy} isCourseMode={true} onPass={()=>handleCourseStepComplete(true)} />
-                                    </div>
+                                    <div className="animate-fade-in"><QuizComponent policy={currentPolicy} isCourseMode={true} onPass={()=>handleCourseStepComplete(true)} /></div>
                                 )}
                             </div>
                         </div>
@@ -310,56 +297,13 @@
                 const bundlePolicies = policies.filter(p => activeBundle.policyIds.includes(p.id));
                 return (
                     <div className="max-w-4xl mx-auto bg-white p-12 min-h-screen">
-                        <div className="no-print flex justify-between mb-8 pb-4 border-b">
-                            <h2 className="text-2xl font-bold">Instructor Guide Preview</h2>
-                            <div className="flex gap-2">
-                                <button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-print mr-2"></i> Print Guide</button>
-                                <button onClick={()=>setView('home')} className="njra-btn njra-btn-secondary">Close</button>
-                            </div>
-                        </div>
-
-                        {/* Cover Page */}
-                        <div className="print-cover-page border-4 border-double border-gray-800 p-12">
-                            <div className="text-4xl font-bold text-njra-900 mb-4">Instructor Training Guide</div>
-                            <div className="text-2xl text-gray-600 mb-8">{activeBundle.title}</div>
-                            <div className="text-left w-full max-w-md mx-auto bg-gray-100 p-6 rounded border border-gray-300">
-                                <h3 className="font-bold border-b border-gray-400 mb-2 pb-1">Included Modules:</h3>
-                                <ul className="list-decimal pl-5">
-                                    {bundlePolicies.map(p => <li key={p.id} className="mb-1">{p.title}</li>)}
-                                </ul>
-                            </div>
-                            <div className="mt-auto font-bold text-red-600 border-2 border-red-600 px-4 py-2 rounded">CONTAINS ANSWER KEYS - DO NOT DISTRIBUTE TO STAFF</div>
-                        </div>
-
-                        {/* Content */}
-                        {bundlePolicies.map((policy, idx) => (
+                        <div className="no-print flex justify-between mb-8 pb-4 border-b"><h2 className="text-2xl font-bold">Instructor Guide Preview</h2><div className="flex gap-2"><button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-print mr-2"></i> Print Guide</button><button onClick={()=>setView('home')} className="njra-btn njra-btn-secondary">Close</button></div></div>
+                        <div className="print-cover-page border-4 border-double border-gray-800 p-12"><div className="text-4xl font-bold text-njra-900 mb-4">Instructor Training Guide</div><div className="text-2xl text-gray-600 mb-8">{activeBundle.title}</div><div className="mt-auto font-bold text-red-600 border-2 border-red-600 px-4 py-2 rounded">CONTAINS ANSWER KEYS</div></div>
+                        {bundlePolicies.map((policy) => (
                             <div key={policy.id} className="print-page-break mb-12 border-b-4 border-gray-300 pb-8">
-                                <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-6">
-                                    <h1 className="text-3xl font-bold text-black m-0">{policy.title}</h1>
-                                    <span className="font-mono text-gray-500">{policy.code}</span>
-                                </div>
-                                
-                                {/* Policy Text */}
+                                <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-6"><h1 className="text-3xl font-bold text-black m-0">{policy.title}</h1><span className="font-mono text-gray-500">{policy.code}</span></div>
                                 <div className="policy-content mb-8" dangerouslySetInnerHTML={{__html: policy.content}}></div>
-
-                                {/* Answer Key */}
-                                <div className="bg-gray-50 p-6 border-2 border-dashed border-gray-400 print:bg-white print:border-black">
-                                    <h3 className="text-xl font-bold text-black mb-4 uppercase flex items-center gap-2"><i className="fas fa-key"></i> Competency Answer Key</h3>
-                                    <div className="space-y-4">
-                                        {policy.questions && policy.questions.map((q, qIdx) => (
-                                            <div key={qIdx} className="print-avoid-break">
-                                                <div className="font-bold text-black mb-1">{qIdx + 1}. {q.text}</div>
-                                                <ul className="pl-6 list-[lower-alpha]">
-                                                    {q.options.map((opt, oIdx) => (
-                                                        <li key={oIdx} className={oIdx === q.correctIndex ? "correct-answer" : "text-gray-600"}>
-                                                            {opt} {oIdx === q.correctIndex && <i className="fas fa-check ml-1"></i>}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                <div className="bg-gray-50 p-6 border-2 border-dashed border-gray-400 print:bg-white print:border-black"><h3 className="text-xl font-bold text-black mb-4 uppercase"><i className="fas fa-key"></i> Competency Answer Key</h3><div className="space-y-4">{policy.questions && policy.questions.map((q, qIdx) => (<div key={qIdx} className="print-avoid-break"><div className="font-bold text-black mb-1">{qIdx + 1}. {q.text}</div><ul className="pl-6 list-[lower-alpha]">{q.options.map((opt, oIdx) => (<li key={oIdx} className={oIdx === q.correctIndex ? "correct-answer" : "text-gray-600"}>{opt}</li>))}</ul></div>))}</div></div>
                             </div>
                         ))}
                     </div>
@@ -372,63 +316,75 @@
                 const [score, setScore] = useState(0);
                 const questions = policy.questions || [];
                 
-                const handleSelect = (qIdx, optIdx) => { if (showResult) return; setUserAnswers(prev => ({...prev, [qIdx]: optIdx})); };
                 const handleSubmit = () => {
                     let correctCount = 0;
                     questions.forEach((q, idx) => { if (userAnswers[idx] === q.correctIndex) correctCount++; });
                     setScore(correctCount); 
                     setShowResult(true);
                 };
-                
                 const isPassed = (score / questions.length) >= 0.8;
-                
                 return (
                     <div>
-                         {showResult && (
-                            <div className={`mb-6 p-4 rounded-lg border-2 text-center ${isPassed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}>
-                                <h2 className="text-2xl font-bold">{isPassed ? "COMPETENCY MET" : "Not Met - Please Review Policy"}</h2>
-                                {isCourseMode && isPassed && (
-                                    <button onClick={onPass} className="mt-4 njra-btn bg-green-700 text-white text-lg animate-pulse">
-                                        Next Module <i className="fas fa-arrow-right ml-2"></i>
-                                    </button>
-                                )}
-                                {isCourseMode && !isPassed && (
-                                    <button onClick={()=>{setUserAnswers({}); setShowResult(false);}} className="mt-4 njra-btn njra-btn-secondary">Retry Quiz</button>
-                                )}
-                            </div>
-                        )}
+                         {showResult && (<div className={`mb-6 p-4 rounded-lg border-2 text-center ${isPassed ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}`}><h2 className="text-2xl font-bold">{isPassed ? "COMPETENCY MET" : "Not Met - Please Review"}</h2>{isCourseMode && isPassed && (<button onClick={onPass} className="mt-4 njra-btn bg-green-700 text-white text-lg animate-pulse">Next Module <i className="fas fa-arrow-right ml-2"></i></button>)}</div>)}
+                        <div className="space-y-6">{questions.map((q, idx) => (<div key={idx} className="bg-white p-4 rounded border border-gray-200"><div className="font-bold text-gray-800 mb-3">{idx + 1}. {q.text}</div><div className="space-y-2">{q.options.map((opt, oIdx) => (<button key={oIdx} onClick={() => !showResult && setUserAnswers(p=>({...p, [idx]:oIdx}))} disabled={showResult} className={`block w-full text-left p-3 border rounded flex items-center ${showResult ? (oIdx===q.correctIndex?'bg-green-100 border-green-500 font-bold':(userAnswers[idx]===oIdx?'bg-red-50 border-red-500':'opacity-50')) : (userAnswers[idx]===oIdx?'bg-njra-50 border-njra-500 font-medium':'hover:bg-gray-50')}`}>{opt}</button>))}</div></div>))}</div>
+                        {!showResult && (<div className="mt-8 text-right"><button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300' : 'njra-btn-primary'}`}>Submit Competency</button></div>)}
+                    </div>
+                );
+            };
 
-                        <div className="space-y-6">
-                            {questions.map((q, idx) => {
-                                const userAnswer = userAnswers[idx];
-                                return (
-                                    <div key={idx} className="bg-white p-4 rounded border border-gray-200">
-                                        <div className="font-bold text-gray-800 mb-3">{idx + 1}. {q.text}</div>
-                                        <div className="space-y-2">
-                                            {q.options.map((opt, oIdx) => {
-                                                let itemClass = "block w-full text-left p-3 border rounded flex items-center ";
-                                                if (showResult) {
-                                                    if (oIdx === q.correctIndex) itemClass += "bg-green-100 border-green-500 font-bold ";
-                                                    else if (oIdx === userAnswers[idx]) itemClass += "bg-red-50 border-red-500 ";
-                                                    else itemClass += "opacity-50 ";
-                                                } else {
-                                                    itemClass += userAnswer === oIdx ? "bg-njra-50 border-njra-500 font-medium " : "hover:bg-gray-50 ";
-                                                }
-                                                return <button key={oIdx} onClick={() => handleSelect(idx, oIdx)} disabled={showResult} className={itemClass}>{opt}</button>;
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        
-                        {!showResult && (
-                            <div className="mt-8 text-right">
-                                <button onClick={handleSubmit} disabled={Object.keys(userAnswers).length < questions.length} className={`njra-btn ${Object.keys(userAnswers).length < questions.length ? 'bg-gray-300' : 'njra-btn-primary'}`}>
-                                    Submit Competency
-                                </button>
+            const PolicyList = () => {
+                const [searchTerm, setSearchTerm] = useState("");
+                const filteredPolicies = policies.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()));
+                return (
+                    <div className="max-w-6xl mx-auto p-6">
+                        {bundles.length > 0 && (
+                            <div className="mb-10">
+                                <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><i className="fas fa-bolt text-quik-500"></i> QuikComps</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{bundles.map(b => <BundleCard key={b.id} bundle={b} />)}</div>
                             </div>
                         )}
+                        <div className="text-center mb-8 bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+                            <h1 className="text-3xl font-bold text-njra-500 mb-2">Policy Database</h1>
+                            <div className="max-w-xl mx-auto relative"><input type="text" className="block w-full px-4 py-3 border-2 border-gray-200 rounded-full bg-gray-50 focus:outline-none focus:border-njra-500 transition-all" placeholder="Search policies..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                        </div>
+                        <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+                            <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Code</th><th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Title</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                                <tbody className="bg-white divide-y divide-gray-200">{filteredPolicies.map(p => (<tr key={p.id} className="hover:bg-njra-50"><td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 font-mono text-gray-500 cursor-pointer w-24">{p.code||'-'}</td><td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 font-medium text-gray-900 cursor-pointer">{p.title}</td><td className="px-6 py-4 text-right"><button onClick={()=>{setSelectedPolicy(p); setView('quiz');}} className="njra-btn njra-btn-primary text-xs py-1 px-3">Quiz</button></td></tr>))}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            };
+
+            const AdminDashboard = () => {
+                const [title, setTitle] = useState("");
+                const [desc, setDesc] = useState("");
+                const [selectedIds, setSelectedIds] = useState(new Set());
+                
+                const saveBundle = async () => {
+                    await window.addDoc(window.collection(window.db, 'bundles'), { title, description: desc, policyIds: Array.from(selectedIds) });
+                    alert("Bundle Saved"); setTitle(""); setDesc(""); setSelectedIds(new Set());
+                };
+                const createTopic = async () => {
+                    if(!newPolicyTopic) return;
+                    setIsProcessing(true);
+                    try {
+                        const data = await callAI(`Create respiratory policy/quiz for: "${newPolicyTopic}"`);
+                        const json = cleanAndParseJSON(data.choices[0].message.content);
+                        await window.addDoc(window.collection(window.db, 'policies'), json);
+                        alert("Created!"); setNewPolicyTopic("");
+                    } catch(e) { alert(e.message); }
+                    setIsProcessing(false);
+                };
+
+                return (
+                    <div className="max-w-5xl mx-auto p-6 bg-white min-h-screen">
+                         <div className="flex justify-between items-center mb-6 border-b pb-4"><h2 className="text-xl font-bold text-njra-900">Admin Dashboard</h2><button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit</button></div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <div className="border p-4 rounded bg-gray-50"><h3 className="font-bold mb-2">1. Config & AI</h3><input type="password" placeholder="OpenAI Key" className="border p-2 rounded w-full mb-2" value={apiKey} onChange={e=>setApiKey(e.target.value)} /><div className="flex gap-2"><input className="border p-2 rounded flex-grow" placeholder="Topic..." value={newPolicyTopic} onChange={e=>setNewPolicyTopic(e.target.value)} /><button onClick={createTopic} disabled={isProcessing} className="njra-btn njra-btn-primary">{isProcessing?'...':'Generate'}</button></div></div>
+                            <div className="border p-4 rounded bg-gray-50"><h3 className="font-bold mb-2">2. Upload Docs</h3><label className="njra-btn njra-btn-secondary w-full cursor-pointer"><input type="file" multiple className="hidden" onChange={e=>setUploadQueue(Array.from(e.target.files))} />Select Files ({uploadQueue.length})</label>{uploadQueue.length>0 && <button onClick={processQueue} className="mt-2 w-full njra-btn njra-btn-primary">Process {uploadQueue.length} Files</button>}</div>
+                         </div>
+                         <div className="border p-6 rounded bg-white shadow-sm"><h3 className="font-bold text-lg text-quik-500 mb-4">3. QuikComp Builder</h3><div className="flex gap-6"><div className="flex-1 space-y-4"><input className="w-full border p-2 rounded" placeholder="Bundle Title" value={title} onChange={e=>setTitle(e.target.value)} /><textarea className="w-full border p-2 rounded" placeholder="Description" value={desc} onChange={e=>setDesc(e.target.value)} rows="2"></textarea><div className="h-48 overflow-y-auto border p-2 rounded bg-gray-50">{policies.map(p=>(<div key={p.id}><label className="flex items-center gap-2"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={()=>{const s=new Set(selectedIds); if(s.has(p.id)) s.delete(p.id); else s.add(p.id); setSelectedIds(s);}} /><span className="text-sm">{p.title}</span></label></div>))}</div><button onClick={saveBundle} className="w-full njra-btn njra-btn-quik">Save Bundle</button></div><div className="flex-1 border-l pl-6"><h4 className="font-bold mb-2">Existing Bundles</h4>{bundles.map(b=>(<div key={b.id} className="flex justify-between p-2 border-b"><span className="text-sm font-bold">{b.title}</span><button onClick={()=>window.deleteDoc(window.doc(window.db,'bundles',b.id))} className="text-red-500"><i className="fas fa-trash"></i></button></div>))}</div></div></div>
                     </div>
                 );
             };
@@ -436,8 +392,7 @@
             // --- MAIN RENDER ---
             return (
                 <div className="min-h-[600px] flex flex-col w-full njra-inner-content">
-                    {/* NAV (Hidden in Course/Print Mode) */}
-                    {view !== 'course_player' && view !== 'instructor_print' && (
+                    {view !== 'course_player' && view !== 'instructor_print' && view !== 'admin' && (
                         <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print">
                             <div className="px-4 py-4 flex justify-between items-center">
                                 <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
@@ -445,50 +400,34 @@
                                     <span className="text-xl font-bold text-njra-900">NJ Respiratory</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary">Library</button>
+                                    <button onClick={()=>setView('home')} className="njra-btn njra-btn-secondary">Library</button>
+                                    <button onClick={()=>setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500"><i className="fas fa-lock"></i></button>
                                 </div>
                             </div>
                         </nav>
                     )}
-
+                    {status && <div className="bg-yellow-50 text-yellow-800 text-center text-xs py-2 border-b border-yellow-200">{status}</div>}
+                    
                     <div className="w-full flex-grow bg-[#f8fafc]">
-                        {view === 'home' && (
-                            <div className="p-8 max-w-6xl mx-auto">
-                                {/* Bundle Grid */}
-                                {bundles.length > 0 && (
-                                    <div className="mb-10">
-                                        <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2"><i className="fas fa-bolt text-quik-500"></i> QuikComps</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {bundles.map(b => <BundleCard key={b.id} bundle={b} />)}
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                {/* Policy Table (Simplified for brevity as focus is bundles) */}
-                                <h2 className="text-xl font-bold text-gray-700 mb-4">All Policies</h2>
-                                <div className="bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
-                                    {policies.map(p => (
-                                        <div key={p.id} onClick={()=>{setSelectedPolicy(p); setView('detail');}} className="p-4 border-b hover:bg-gray-50 cursor-pointer flex justify-between">
-                                            <span className="font-bold text-gray-700">{p.title}</span>
-                                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">{p.code}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
+                        {view === 'home' && <PolicyList />}
                         {view === 'course_player' && <CoursePlayer />}
                         {view === 'instructor_print' && <InstructorGuideView />}
-                        
-                        {/* Detail View (Simplified) */}
-                        {view === 'detail' && selectedPolicy && (
-                            <div className="p-8 max-w-4xl mx-auto bg-white min-h-screen">
-                                <button onClick={()=>setView('home')} className="mb-4 text-gray-500"><i className="fas fa-arrow-left"></i> Back</button>
-                                <h1 className="text-3xl font-bold text-njra-500">{selectedPolicy.title}</h1>
-                                <div className="policy-content mt-8" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div>
-                            </div>
-                        )}
+                        {view === 'admin' && <AdminDashboard />}
+                        {view === 'detail' && selectedPolicy && <div className="p-8 max-w-4xl mx-auto bg-white min-h-screen"><button onClick={()=>setView('home')} className="mb-4 text-gray-500"><i className="fas fa-arrow-left"></i> Back</button><h1 className="text-3xl font-bold text-njra-500">{selectedPolicy.title}</h1><div className="policy-content mt-8" dangerouslySetInnerHTML={{__html: selectedPolicy.content}}></div></div>}
+                        {view === 'quiz' && selectedPolicy && <div className="p-8 max-w-3xl mx-auto bg-white min-h-screen"><button onClick={()=>setView('home')} className="mb-4 text-gray-500"><i className="fas fa-arrow-left"></i> Back</button><h1 className="text-2xl font-bold mb-4">Quiz: {selectedPolicy.title}</h1><QuizComponent policy={selectedPolicy} /></div>}
                     </div>
+
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm border border-gray-200">
+                                <h3 className="font-bold mb-6 text-xl text-njra-900 text-center">Admin Access</h3>
+                                <form onSubmit={(e)=>{e.preventDefault(); if(adminPass==="NJRA2025"){setIsAdmin(true); setShowAdminLogin(false); setView('admin');}else{alert("Wrong Code");}}}>
+                                    <input type="password" placeholder="Code" className="w-full border border-gray-300 p-3 mb-6 rounded outline-none" value={adminPass} onChange={e=>setAdminPass(e.target.value)}/>
+                                    <div className="flex gap-4"><button type="button" onClick={()=>setShowAdminLogin(false)} className="njra-btn njra-btn-secondary flex-1">Cancel</button><button type="submit" className="njra-btn njra-btn-primary flex-1">Login</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
