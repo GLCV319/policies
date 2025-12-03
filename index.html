@@ -122,6 +122,9 @@
             OUTPUT FORMAT (JSON): { "title": "...", "code": "...", "category": "...", "content": "HTML...", "questions": [{ "text": "...", "options": ["A","B"], "correctIndex": 0 }] }
         `;
 
+        // PROXY TO BYPASS BROWSER CORS BLOCK
+        const CORS_PROXY = "[https://corsproxy.io/](https://corsproxy.io/)?";
+
         const App = () => {
             const [view, setView] = useState('home');
             const [policies, setPolicies] = useState([]);
@@ -176,7 +179,8 @@
                 if (!apiKey) { alert("Please enter a key first."); return; }
                 setStatus("Testing Connection...");
                 try {
-                    const response = await fetch("[https://api.openai.com/v1/models](https://api.openai.com/v1/models)", {
+                    // Uses CORS Proxy to avoid Network Error
+                    const response = await fetch(CORS_PROXY + "[https://api.openai.com/v1/models](https://api.openai.com/v1/models)", {
                         method: "GET",
                         headers: { "Authorization": `Bearer ${apiKey}` }
                     });
@@ -187,13 +191,14 @@
                         alert("Connection Failed: " + (err.error?.message || response.statusText));
                     }
                 } catch (e) {
-                    alert("Network Error (Failed to Fetch). Check your internet or firewall.");
+                    alert("Network Error (CORS). I am attempting to use a proxy, but if this fails, please check your internet.");
                 }
                 setStatus("");
             };
 
             const callAI = async (userContent) => {
-                const response = await fetch("[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)", {
+                // Uses CORS Proxy to avoid Network Error
+                const response = await fetch(CORS_PROXY + "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
                     body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: userContent }], response_format: { type: "json_object" } })
