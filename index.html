@@ -70,7 +70,7 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        #njra-app-root { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; line-height: 1.5; width: 100%; min-height: 100vh; }
+        #njra-app-root { font-family: 'Inter', sans-serif; background-color: #f9fafb; color: #1f2937; line-height: 1.5; width: 100%; min-height: 100vh; }
         
         .njra-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .njra-btn-primary { background-color: #af3030 !important; color: white !important; }
@@ -265,33 +265,27 @@
                 
                 return (
                     <div className="w-full flex-grow bg-gray-50 min-h-screen flex flex-col">
-                        {/* HERO SECTION */}
-                        <div className="bg-njra-600 pb-24 pt-12 px-8 shadow-md relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4">
-                                <button onClick={()=>setShowAdminLogin(true)} className="text-red-300 hover:text-white transition-colors text-sm font-semibold"><i className="fas fa-lock mr-2"></i> Admin Access</button>
-                            </div>
-                            <div className="max-w-5xl mx-auto text-center relative z-10">
-                                <div className="inline-block p-3 bg-white/10 rounded-full mb-4 text-white backdrop-blur-sm"><i className="fas fa-lungs fa-2x"></i></div>
-                                <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight leading-tight">
-                                    NJ Respiratory Policy & Competency Portal
-                                </h1>
-                                <p className="text-red-100 text-lg mb-8 max-w-2xl mx-auto font-light">
-                                    The centralized hub for clinical protocols, staff competencies, and training bundles.
-                                </p>
-                                <div className="max-w-2xl mx-auto relative transform translate-y-4">
-                                    <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-                                        <i className="fas fa-search text-gray-400 text-lg"></i>
+                        <div className="max-w-6xl mx-auto px-6 py-10 w-full">
+                            
+                            {/* CLEAN SEARCH BOX */}
+                            <div className="text-center mb-10 bg-white p-10 rounded-xl shadow-sm border border-gray-100">
+                                <h1 className="text-3xl font-extrabold text-njra-500 mb-2">Policy & Competency Portal</h1>
+                                <p className="text-gray-500 mb-6">Search clinical protocols, staff competencies, and training bundles.</p>
+                                <div className="max-w-xl mx-auto relative">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                                        <i className="fas fa-search"></i>
                                     </div>
-                                    <input type="text" className="block w-full pl-14 pr-6 py-4 rounded-full shadow-xl border-none focus:ring-4 focus:ring-red-300/50 text-gray-700 text-lg transition-all outline-none" placeholder="Search by keyword, code (e.g., RT-101), or topic..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    <input 
+                                        type="text" 
+                                        className="block w-full pl-12 pr-4 py-3 border border-gray-200 rounded-full bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-njra-500 focus:border-transparent transition-all shadow-inner" 
+                                        placeholder="Search keywords, codes, or topics..." 
+                                        value={searchTerm} 
+                                        onChange={(e) => setSearchTerm(e.target.value)} 
+                                    />
                                 </div>
                             </div>
-                            <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
-                            <div className="absolute bottom-0 right-0 w-96 h-96 bg-black/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3"></div>
-                        </div>
-
-                        {/* MAIN CONTENT AREA */}
-                        <div className="max-w-6xl mx-auto px-6 pb-12 w-full -mt-6 relative z-20">
                             
+                            {/* BUNDLES */}
                             {bundles.length > 0 && !searchTerm && (
                                 <div className="mb-12 animate-fade-in">
                                     <div className="flex items-center gap-2 mb-4 ml-1">
@@ -304,32 +298,68 @@
                                 </div>
                             )}
 
+                            {/* POLICY TABLE */}
                             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-fade-in">
                                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 bg-gray-100 rounded text-gray-500"><i className="fas fa-file-alt"></i></div>
-                                        <div><h2 className="text-lg font-bold text-gray-800">Document Library</h2><p className="text-xs text-gray-500">Last Updated: {lastUpdated}</p></div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-gray-800">Document Library</h2>
+                                            <p className="text-xs text-gray-500">Last Updated: {lastUpdated}</p>
+                                        </div>
                                     </div>
-                                    <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200 font-mono">{filteredPolicies.length} Records</span>
+                                    <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200 font-mono">
+                                        {filteredPolicies.length} Records
+                                    </span>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-100">
-                                        <thead className="bg-gray-50/50"><tr><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Code</th><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th><th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th></tr></thead>
+                                        <thead className="bg-gray-50/50">
+                                            <tr>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Code</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Policy Title</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th>
+                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
                                         <tbody className="bg-white divide-y divide-gray-100">
                                             {filteredPolicies.map(p => (
                                                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors group">
-                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-500 cursor-pointer group-hover:text-blue-600 font-medium">{p.code || <span className="text-gray-300">-</span>}</td>
-                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 text-sm text-gray-800 font-medium cursor-pointer group-hover:text-blue-600">{p.title}</td>
-                                                    <td className="px-6 py-4 hidden md:table-cell"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{p.category || "General"}</span></td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={()=>{setSelectedPolicy(p); setView('quiz');}} className="text-quik-600 hover:text-quik-500 bg-quik-50 hover:bg-quik-100 px-3 py-1 rounded transition-colors font-bold text-xs">Take Quiz</button></td>
+                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-500 cursor-pointer group-hover:text-blue-600 font-medium">
+                                                        {p.code || <span className="text-gray-300">-</span>}
+                                                    </td>
+                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 text-sm text-gray-800 font-medium cursor-pointer group-hover:text-blue-600">
+                                                        {p.title}
+                                                    </td>
+                                                    <td className="px-6 py-4 hidden md:table-cell">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                            {p.category || "General"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                        <button onClick={()=>{setSelectedPolicy(p); setView('quiz');}} className="text-quik-600 hover:text-quik-500 bg-quik-50 hover:bg-quik-100 px-3 py-1 rounded transition-colors font-bold text-xs">
+                                                            Take Quiz
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
+                                            {filteredPolicies.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
+                                                        <i className="fas fa-folder-open text-4xl mb-3 opacity-20"></i>
+                                                        <p>No documents found matching "{searchTerm}"</p>
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
-                        <div className="mt-auto bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400">&copy; 2025 New Jersey Respiratory Associates. Internal Use Only.</div>
+                        
+                        <div className="mt-auto bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400">
+                            &copy; 2025 New Jersey Respiratory Associates. Internal Use Only.
+                        </div>
                     </div>
                 );
             };
@@ -343,8 +373,16 @@
                             <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 text-yellow-500 text-4xl"><i className="fas fa-trophy"></i></div>
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">Bundle Completed!</h1>
                             <p className="text-lg text-gray-500 mb-8">You have successfully completed <strong>{activeBundle.title}</strong>.</p>
-                            <div className="flex justify-center gap-4 no-print"><button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-certificate mr-2"></i> Print Certificate</button><button onClick={()=>setView('home')} className="njra-btn njra-btn-outline">Return Home</button></div>
-                            <div className="print-only print-cover-page border-8 border-double border-njra-900 p-12"><div className="text-5xl font-serif font-bold text-njra-500 mb-8">Certificate of Completion</div><h2 className="text-4xl font-bold border-b-2 border-black pb-4 mb-4 inline-block">{activeBundle.title}</h2><div className="text-left mt-8 w-full max-w-2xl mx-auto"><p className="font-bold mb-2">Modules Verified:</p><ul className="list-disc pl-5">{bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}</ul></div><div className="mt-auto w-full flex justify-between px-12 pt-12"><div className="text-center border-t border-black pt-2 w-64">Employee Signature</div><div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div></div></div>
+                            <div className="flex justify-center gap-4 no-print">
+                                <button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-certificate mr-2"></i> Print Certificate</button>
+                                <button onClick={()=>setView('home')} className="njra-btn njra-btn-outline">Return Home</button>
+                            </div>
+                            <div className="print-only print-cover-page border-8 border-double border-njra-900 p-12">
+                                <div className="text-5xl font-serif font-bold text-njra-500 mb-8">Certificate of Completion</div>
+                                <h2 className="text-4xl font-bold border-b-2 border-black pb-4 mb-4 inline-block">{activeBundle.title}</h2>
+                                <div className="text-left mt-8 w-full max-w-2xl mx-auto"><p className="font-bold mb-2">Modules Verified:</p><ul className="list-disc pl-5">{bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}</ul></div>
+                                <div className="mt-auto w-full flex justify-between px-12 pt-12"><div className="text-center border-t border-black pt-2 w-64">Employee Signature</div><div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div></div>
+                            </div>
                         </div>
                     );
                 }
@@ -405,7 +443,6 @@
                 );
             };
 
-            // --- FULL ADMIN DASHBOARD RESTORED ---
             const AdminDashboard = () => {
                 const [title, setTitle] = useState("");
                 const [desc, setDesc] = useState("");
@@ -532,7 +569,22 @@
             // --- MAIN RENDER ---
             return (
                 <div className="min-h-screen flex flex-col w-full njra-inner-content bg-gray-50">
+                    {/* NAV BAR */}
+                    {view !== 'course_player' && view !== 'instructor_print' && (
+                        <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print">
+                            <div className="px-6 py-4 flex justify-between items-center max-w-7xl mx-auto">
+                                <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
+                                    <span className="text-2xl mr-2 text-njra-500"><i className="fas fa-lungs"></i></span>
+                                    <span className="text-xl font-bold text-gray-800">NJ Respiratory</span>
+                                </div>
+                                <button onClick={()=>setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500 transition-colors">
+                                    <i className="fas fa-lock"></i>
+                                </button>
+                            </div>
+                        </nav>
+                    )}
                     {status && <div className="bg-yellow-50 text-yellow-800 text-center text-xs py-2 border-b border-yellow-200">{status}</div>}
+                    
                     {view === 'home' && <PolicyList />}
                     {view === 'course_player' && <CoursePlayer />}
                     {view === 'instructor_print' && <InstructorGuideView />}
