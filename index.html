@@ -5,26 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NJ Respiratory Policy Portal</title>
     
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Mammoth.js (Reads Word Docs) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
-    <!-- EmailJS SDK -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
-    <!-- Firebase Connection -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, where, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
@@ -62,7 +55,7 @@
             window.orderBy = orderBy;
             window.where = where;
             window.signInAnonymously = signInAnonymously;
-            window.updateDoc = updateDoc; // Explicitly exposed for update function
+            window.updateDoc = updateDoc; 
             
             console.log("Firebase Connected");
         } catch (e) {
@@ -96,6 +89,10 @@
                             500: '#af3030',  // PRIMARY RED
                             600: '#942626',
                             900: '#444444'   // SECONDARY GRAY
+                        },
+                        quik: {
+                            500: '#0f766e', // Teal for QuikComps
+                            50: '#f0fdfa'
                         }
                     }
                 }
@@ -147,6 +144,14 @@
         .njra-btn-primary:disabled {
             background-color: #fca5a5 !important;
             cursor: not-allowed;
+        }
+
+        .njra-btn-quik {
+            background-color: #0f766e !important; /* TEAL */
+            color: #ffffff !important;
+        }
+        .njra-btn-quik:hover {
+            background-color: #115e59 !important;
         }
 
         .njra-btn-secondary {
@@ -275,6 +280,8 @@
         const App = () => {
             const [view, setView] = useState('home');
             const [policies, setPolicies] = useState([]);
+            const [bundles, setBundles] = useState([]); // NEW: Bundles State
+            const [activeBundle, setActiveBundle] = useState(null); // NEW: Currently Selected Bundle
             const [selectedPolicy, setSelectedPolicy] = useState(null);
             const [isAdmin, setIsAdmin] = useState(false);
             const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -300,6 +307,8 @@
                     try {
                         if (window.auth && window.db) {
                             await window.signInAnonymously(window.auth);
+                            
+                            // Policies Listener
                             const q = window.query(window.collection(window.db, 'policies'), window.orderBy('title'));
                             window.onSnapshot(q, (snapshot) => {
                                 const loaded = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -307,6 +316,13 @@
                                 setStatus(""); 
                             }, (error) => { console.error("DB Error:", error); setStatus("Error: " + error.message); });
                             
+                            // Bundles Listener (NEW)
+                            const bQ = window.query(window.collection(window.db, 'bundles'), window.orderBy('title'));
+                            window.onSnapshot(bQ, (snapshot) => {
+                                const loadedBundles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                                setBundles(loadedBundles);
+                            });
+
                             const metaRef = window.doc(window.db, 'metadata', 'system');
                             window.onSnapshot(metaRef, (doc) => {
                                 if(doc.exists()) setLastUpdated(doc.data().lastUpdated);
@@ -316,8 +332,6 @@
                     } catch (e) { console.error("Init Error:", e); setStatus("Connection Error: " + e.message); }
                 };
                 
-                const params = new URLSearchParams(window.location.search);
-                const codeParam = params.get('code');
                 init();
             }, []);
 
@@ -545,25 +559,68 @@
                 catch(e) { alert("Delete failed: " + e.message); }
             };
 
+            // --- BUNDLE MANAGEMENT (ADMIN) ---
+            const saveBundle = async (bundleId, title, desc, policyIds) => {
+                try {
+                    const bundleData = { title, description: desc, policyIds, lastUpdated: new Date().toLocaleString() };
+                    if (bundleId) {
+                        await window.updateDoc(window.doc(window.db, 'bundles', bundleId), bundleData);
+                    } else {
+                        await window.addDoc(window.collection(window.db, 'bundles'), bundleData);
+                    }
+                    alert("QuikComp Bundle Saved!");
+                } catch(e) {
+                    alert("Error saving bundle: " + e.message);
+                }
+            };
+
+            const deleteBundle = async (id) => {
+                if(!confirm("Delete this QuikComp Bundle? (Policies will remain, only the group is deleted)")) return;
+                try { await window.deleteDoc(window.doc(window.db, 'bundles', id)); } catch(e) { alert(e.message); }
+            };
+
             // --- COMPONENTS ---
 
-            const PolicyList = ({ policies, onSelectPolicy, onTakeQuiz }) => {
+            const BundleCard = ({ bundle, onClick }) => (
+                <div onClick={onClick} className="bg-quik-500 text-white p-6 rounded-lg shadow-md cursor-pointer hover:bg-njra-600 transition-all transform hover:-translate-y-1 relative overflow-hidden group">
+                    <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-2">
+                            <i className="fas fa-layer-group text-2xl opacity-80"></i>
+                            <span className="bg-white/20 px-2 py-1 rounded text-xs font-bold">{bundle.policyIds ? bundle.policyIds.length : 0} Policies</span>
+                        </div>
+                        <h3 className="font-bold text-xl mb-1 text-white">{bundle.title}</h3>
+                        <p className="text-white/80 text-sm">{bundle.description}</p>
+                    </div>
+                    <i className="fas fa-certificate absolute -bottom-4 -right-4 text-9xl opacity-10 group-hover:opacity-20 transition-opacity"></i>
+                </div>
+            );
+
+            const PolicyList = ({ policies, bundles, onSelectPolicy, onTakeQuiz, activeBundle, onSelectBundle, onClearBundle }) => {
                 const [searchTerm, setSearchTerm] = useState("");
                 const [viewMode, setViewMode] = useState('list'); 
 
-                const groupedPolicies = policies.reduce((acc, policy) => {
+                // Filter Logic
+                let displayPolicies = policies;
+                
+                // 1. Filter by Bundle
+                if (activeBundle) {
+                    displayPolicies = displayPolicies.filter(p => activeBundle.policyIds && activeBundle.policyIds.includes(p.id));
+                }
+
+                // 2. Filter by Search
+                const filteredPolicies = displayPolicies.filter(p => 
+                    p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+
+                const groupedPolicies = filteredPolicies.reduce((acc, policy) => {
                     const cat = policy.category || "Uncategorized";
                     if (!acc[cat]) acc[cat] = [];
                     acc[cat].push(policy);
                     return acc;
                 }, {});
 
-                const filteredPolicies = policies.filter(p => 
-                    p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
-                );
-
-                const showGrouped = searchTerm === "";
+                const showGrouped = searchTerm === "" && !activeBundle;
 
                 return (
                     <div className="w-full">
@@ -577,6 +634,42 @@
                             </div>
                         </div>
 
+                        {/* QUIKCOMPS SECTION (Only on main view) */}
+                        {!activeBundle && !searchTerm && bundles.length > 0 && (
+                            <div className="mb-10">
+                                <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+                                    <i className="fas fa-bolt text-quik-500"></i> QuikComps <span className="text-sm font-normal text-gray-500">(Curated Competency Bundles)</span>
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {bundles.map(b => (
+                                        <BundleCard key={b.id} bundle={b} onClick={() => onSelectBundle(b)} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ACTIVE BUNDLE HEADER */}
+                        {activeBundle && (
+                            <div className="mb-8 bg-quik-50 border-2 border-quik-500 rounded-lg p-6 flex flex-col md:flex-row justify-between items-center animate-fade-in">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-quik-500 m-0"><i className="fas fa-layer-group mr-2"></i> {activeBundle.title}</h2>
+                                    <p className="text-gray-600 mt-1">{activeBundle.description}</p>
+                                    <p className="text-sm text-gray-500 font-mono mt-2">{filteredPolicies.length} Policies Found</p>
+                                </div>
+                                <div className="flex gap-2 mt-4 md:mt-0">
+                                    <button onClick={() => {
+                                        filteredPolicies.forEach(p => togglePrintSelection(p.id));
+                                        handleBatchPrint();
+                                    }} className="njra-btn bg-white text-quik-500 border border-quik-500 hover:bg-quik-500 hover:text-white transition-colors">
+                                        <i className="fas fa-print mr-2"></i> Print Bundle
+                                    </button>
+                                    <button onClick={onClearBundle} className="njra-btn njra-btn-secondary">
+                                        <i className="fas fa-times mr-2"></i> Clear Filter
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Controls */}
                         <div className="flex justify-between items-center mb-4 px-1 sticky top-16 z-30 bg-[#f8fafc] py-2">
                             <h2 className="text-lg font-bold text-gray-700 flex items-center">
@@ -585,7 +678,7 @@
                                         <i className="fas fa-print mr-2"></i> Print ({selectedForPrint.size}) Selected
                                     </button>
                                 ) : (
-                                    <span>Table of Contents</span>
+                                    <span>{activeBundle ? "Bundle Contents" : "All Policies"}</span>
                                 )}
                             </h2>
                             <div className="flex bg-white p-1 rounded-md border border-gray-300 shadow-sm">
@@ -630,13 +723,18 @@
                             <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {filteredPolicies.map((policy) => (
+                                        {filteredPolicies.length > 0 ? filteredPolicies.map((policy) => (
                                             <tr key={policy.id} className="hover:bg-njra-50">
                                                 <td className="px-6 py-4 text-center w-12"><input type="checkbox" className="w-4 h-4" checked={selectedForPrint.has(policy.id)} onChange={() => togglePrintSelection(policy.id)} /></td>
                                                 <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 font-mono text-gray-500 w-24 cursor-pointer">{policy.code}</td>
                                                 <td onClick={() => onSelectPolicy(policy)} className="px-6 py-4 font-medium text-gray-900 cursor-pointer">{policy.title}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button onClick={() => onTakeQuiz(policy)} className="njra-btn njra-btn-primary text-xs py-1 px-3"><i className="fas fa-graduation-cap"></i></button>
+                                                </td>
                                             </tr>
-                                        ))}
+                                        )) : (
+                                            <tr><td colSpan="4" className="text-center py-8 text-gray-500">No policies found.</td></tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -700,7 +798,7 @@
                 const isPassed = (score / questions.length) >= 0.8;
                 const percent = Math.round((score / questions.length) * 100);
                 
-                // NEW: Updated Email Logic
+                // Updated Email Logic
                 const handleSendEmail = () => {
                     if (!userName || !userEmail) return;
                     setIsSendingEmail(true);
@@ -711,7 +809,6 @@
                         date: new Date().toLocaleDateString(),
                         user_name: userName,
                         user_email: userEmail,
-                        // Provide a formatted HTML string if the template accepts a {{{message}}} variable
                         message_html: `
                             <div style="font-family: system-ui, sans-serif, Arial; font-size: 12px">
                                 <div>
@@ -809,6 +906,81 @@
                 );
             };
 
+            const AdminQuikCompBuilder = ({ policies, bundles, onSave, onDelete }) => {
+                const [title, setTitle] = useState("");
+                const [desc, setDesc] = useState("");
+                const [selectedIds, setSelectedIds] = useState(new Set());
+                const [editingId, setEditingId] = useState(null);
+
+                const toggleId = (id) => {
+                    const newSet = new Set(selectedIds);
+                    if (newSet.has(id)) newSet.delete(id);
+                    else newSet.add(id);
+                    setSelectedIds(newSet);
+                };
+
+                const loadBundle = (b) => {
+                    setTitle(b.title);
+                    setDesc(b.description);
+                    setSelectedIds(new Set(b.policyIds || []));
+                    setEditingId(b.id);
+                };
+
+                const handleSave = () => {
+                    if(!title) return alert("Title required");
+                    onSave(editingId, title, desc, Array.from(selectedIds));
+                    setTitle(""); setDesc(""); setSelectedIds(new Set()); setEditingId(null);
+                };
+
+                return (
+                    <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
+                        <div className="flex gap-6 flex-col md:flex-row">
+                            {/* LEFT: Builder */}
+                            <div className="flex-1">
+                                <h3 className="font-bold text-lg text-quik-500 mb-4">{editingId ? 'Edit' : 'Create'} QuikComp Bundle</h3>
+                                <div className="space-y-4">
+                                    <input className="w-full border p-2 rounded" placeholder="Bundle Title (e.g. ICU Orientation)" value={title} onChange={e=>setTitle(e.target.value)} />
+                                    <textarea className="w-full border p-2 rounded" placeholder="Short Description..." value={desc} onChange={e=>setDesc(e.target.value)} rows="3"></textarea>
+                                    <div className="p-4 bg-gray-50 border rounded max-h-60 overflow-y-auto">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">Select Policies to Include:</p>
+                                        {policies.map(p => (
+                                            <div key={p.id} className="flex items-center gap-2 mb-1">
+                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={()=>toggleId(p.id)} />
+                                                <span className="text-sm truncate">{p.title}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSave} className="njra-btn njra-btn-quik flex-1"><i className="fas fa-save mr-2"></i> Save Bundle</button>
+                                        {editingId && <button onClick={()=>{setTitle(""); setDesc(""); setSelectedIds(new Set()); setEditingId(null);}} className="njra-btn njra-btn-outline">Cancel</button>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* RIGHT: List */}
+                            <div className="flex-1 border-l pl-6">
+                                <h3 className="font-bold text-lg text-gray-700 mb-4">Existing Bundles</h3>
+                                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                    {bundles.map(b => (
+                                        <div key={b.id} className="p-3 border rounded hover:bg-gray-50 flex justify-between items-center group">
+                                            <div>
+                                                <div className="font-bold text-sm">{b.title}</div>
+                                                <div className="text-xs text-gray-500">{b.policyIds ? b.policyIds.length : 0} Policies</div>
+                                            </div>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={()=>loadBundle(b)} className="text-blue-500"><i className="fas fa-edit"></i></button>
+                                                <button onClick={()=>onDelete(b.id)} className="text-red-500"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {bundles.length === 0 && <p className="text-sm text-gray-400 italic">No bundles created yet.</p>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
             const handleAdminLogin = (e) => {
                 e.preventDefault();
                 if(adminPass === "NJRA2025") { setIsAdmin(true); setShowAdminLogin(false); setView('admin'); }
@@ -820,12 +992,12 @@
                     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 no-print w-full rounded-b-lg">
                         <div className="px-4 py-4">
                             <div className="flex justify-between items-center w-full">
-                                <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
+                                <div className="flex items-center cursor-pointer" onClick={() => { setView('home'); setActiveBundle(null); }}>
                                     <span className="text-2xl mr-2 text-njra-500"><i className="fas fa-lungs"></i></span>
                                     <span className="text-xl font-bold text-njra-900">NJ Respiratory Policy Portal</span>
                                 </div>
                                 <div className="flex items-center space-x-3">
-                                    <button onClick={() => setView('home')} className={`njra-btn ${view === 'home' ? 'njra-btn-secondary' : 'njra-btn-outline'}`}>Policies</button>
+                                    <button onClick={() => { setView('home'); setActiveBundle(null); }} className={`njra-btn ${view === 'home' ? 'njra-btn-secondary' : 'njra-btn-outline'}`}>Policies</button>
                                     <button type="button" onClick={() => setShowAdminLogin(true)} className="text-gray-400 hover:text-njra-500 p-2 cursor-pointer"><i className="fas fa-lock"></i></button>
                                 </div>
                             </div>
@@ -838,6 +1010,10 @@
                         {view === 'home' && (
                             <PolicyList 
                                 policies={policies} 
+                                bundles={bundles}
+                                activeBundle={activeBundle}
+                                onSelectBundle={(b) => setActiveBundle(b)}
+                                onClearBundle={() => setActiveBundle(null)}
                                 onSelectPolicy={(p) => { setSelectedPolicy(p); setView('detail'); }} 
                                 onTakeQuiz={(p) => { setSelectedPolicy(p); setView('quiz'); }}
                             />
@@ -911,6 +1087,17 @@
                                             <button onClick={createFromTopic} disabled={isProcessing} className="njra-btn njra-btn-primary"><i className="fas fa-magic"></i></button>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* QUIKCOMP BUILDER (NEW) */}
+                                <div className="mb-8">
+                                    <h3 className="font-bold text-lg text-njra-900 mb-4">4. Manage QuikComps</h3>
+                                    <AdminQuikCompBuilder 
+                                        policies={policies} 
+                                        bundles={bundles} 
+                                        onSave={saveBundle} 
+                                        onDelete={deleteBundle} 
+                                    />
                                 </div>
 
                                 {/* Upload Queue Section */}
