@@ -618,6 +618,58 @@ const App = () => {
               <div className="bg-gray-50 px-3 py-1 rounded inline-block text-xs font-mono mb-2 text-gray-500">CODE: {selectedPolicy.code}</div>
               <h1 className="text-4xl font-extrabold text-njra-500 leading-tight">{selectedPolicy.title}</h1>
               <div className="policy-content mt-8" dangerouslySetInnerHTML={{ __html: sanitize(selectedPolicy.content) }}></div>
+            <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-10 px-4">
+              <div className="max-w-5xl mx-auto">
+                <div className="bg-white shadow-2xl border border-gray-100 rounded-3xl overflow-hidden">
+                  <div className="bg-gradient-to-r from-njra-50 via-white to-quik-50 px-6 py-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold text-gray-600">
+                        <span className="px-3 py-1 bg-white/80 border border-gray-200 rounded-full shadow-sm font-mono">Code: {selectedPolicy.code || "N/A"}</span>
+                        <span className="px-3 py-1 bg-white/80 border border-gray-200 rounded-full shadow-sm">
+                          <i className="fas fa-folder-open mr-1 text-gray-500"></i>
+                          {selectedPolicy.category || "General"}
+                        </span>
+                        <span className="px-3 py-1 bg-white/80 border border-gray-200 rounded-full shadow-sm">
+                          <i className="fas fa-clipboard-check mr-1 text-gray-500"></i>
+                          {selectedPolicy.questions?.length || 0} Competency Items
+                        </span>
+                      </div>
+                      <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">{selectedPolicy.title}</h1>
+                      <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <i className="fas fa-info-circle text-njra-500"></i>
+                        Review the policy then launch the competency or print a copy for bedside reference.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 sm:justify-end no-print">
+                      <button onClick={() => setView("home")} className="njra-btn njra-btn-outline text-sm">
+                        <i className="fas fa-times mr-2"></i> Exit
+                      </button>
+                      <button onClick={() => setView("quiz")} className="njra-btn njra-btn-quik text-sm">
+                        <i className="fas fa-clipboard-check mr-2"></i> Competency
+                      </button>
+                      <button onClick={() => window.print()} className="njra-btn njra-btn-primary text-sm">
+                        <i className="fas fa-print mr-2"></i> Print
+                      </button>
+                    </div>
+                  </div>
+                  <div className="px-6 sm:px-10 py-8 space-y-8">
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 flex items-center justify-between text-sm text-gray-600 no-print">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-200 text-njra-500"><i className="fas fa-book-open"></i></span>
+                        <div>
+                          <div className="font-semibold text-gray-800">Policy Overview</div>
+                          <p className="text-xs text-gray-500">Clean layout optimized for reading and printing.</p>
+                        </div>
+                      </div>
+                      <span className="hidden sm:inline-flex items-center gap-2 font-mono text-xs bg-white px-3 py-1 rounded-full border border-gray-200">
+                        <i className="fas fa-history text-gray-500"></i>
+                        Updated: {metadata.lastUpdated}
+                      </span>
+                    </div>
+                    <div className="policy-content prose max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: sanitize(selectedPolicy.content) }}></div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {view === "quiz" && selectedPolicy && (
@@ -643,14 +695,3 @@ const App = () => {
                 <button type="button" onClick={() => setShowAdminLogin(false)} className="njra-btn njra-btn-outline flex-1 py-3">Cancel</button>
                 <button type="submit" className="njra-btn njra-btn-primary flex-1 py-3 shadow-lg">Login</button>
               </div>
-            </form>
-            {adminStatus && <p className="text-xs text-gray-500 mt-3 text-center">{adminStatus}</p>}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const root = ReactDOM.createRoot(document.getElementById("njra-app-root"));
-root.render(<App />);
