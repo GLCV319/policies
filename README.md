@@ -1,8 +1,3 @@
-DME.md
-New
-+16
--0
-
 # Policies Portal
 
 This repository contains the modular React-based policies portal. The current branch is `work` with no Git remotes configured yet.
