@@ -37,7 +37,6 @@
             const app = initializeApp(firebaseConfig);
             window.db = getFirestore(app);
             window.auth = getAuth(app);
-            // Expose for React
             window.collection = collection; window.addDoc = addDoc; window.getDocs = getDocs; 
             window.updateDoc = updateDoc; window.deleteDoc = deleteDoc; window.setDoc = setDoc; 
             window.getDoc = getDoc; window.doc = doc; window.onSnapshot = onSnapshot; 
@@ -160,13 +159,49 @@
                 await window.setDoc(window.doc(window.db, 'metadata', 'system'), { lastUpdated: now });
             };
 
+            // --- FIXED AI CONNECTION LOGIC ---
+            const handleApiKeyChange = (e) => {
+                const key = e.target.value.trim();
+                setApiKey(key);
+                localStorage.setItem('njra_openai_key', key);
+            };
+
+            const resetApiKey = () => {
+                setApiKey("");
+                localStorage.removeItem('njra_openai_key');
+                alert("API Key cleared.");
+            };
+
+            const testOpenAIConnection = async () => {
+                if (!apiKey) { alert("Please enter a key first."); return; }
+                setStatus("Testing Connection...");
+                try {
+                    const response = await fetch("[https://api.openai.com/v1/models](https://api.openai.com/v1/models)", {
+                        method: "GET",
+                        headers: { "Authorization": `Bearer ${apiKey}` }
+                    });
+                    if (response.ok) {
+                        alert("Connection Successful! Your API Key is valid.");
+                    } else {
+                        const err = await response.json();
+                        alert("Connection Failed: " + (err.error?.message || response.statusText));
+                    }
+                } catch (e) {
+                    alert("Network Error (Failed to Fetch). Check your internet or firewall.");
+                }
+                setStatus("");
+            };
+
             const callAI = async (userContent) => {
                 const response = await fetch("[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
                     body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: userContent }], response_format: { type: "json_object" } })
                 });
-                if (!response.ok) throw new Error("AI Error");
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || "AI API Error");
+                }
                 return await response.json();
             };
 
@@ -470,8 +505,14 @@
                             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
                                 <h3 className="font-bold text-lg text-njra-900 mb-4 border-b pb-2">1. System Configuration</h3>
                                 <div className="space-y-4">
-                                    <input type="password" placeholder="OpenAI API Key" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-njra-500 outline-none" value={apiKey} onChange={e=>setApiKey(e.target.value)} />
-                                    <div className="flex gap-2">
+                                    <input type="password" placeholder="OpenAI API Key" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-njra-500 outline-none" value={apiKey} onChange={handleApiKeyChange} />
+                                    {apiKey && (
+                                        <div className="flex gap-2">
+                                            <button onClick={testOpenAIConnection} className="text-green-600 text-xs font-bold hover:underline">Test Connection</button>
+                                            <button onClick={resetApiKey} className="text-red-600 text-xs font-bold hover:underline">Reset Key</button>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2 pt-2 border-t mt-4">
                                         <input className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-njra-500 outline-none" placeholder="Generate Topic (e.g. Fire Safety)" value={newPolicyTopic} onChange={e=>setNewPolicyTopic(e.target.value)} />
                                         <button onClick={createFromTopic} disabled={isProcessing} className="njra-btn njra-btn-primary whitespace-nowrap">{isProcessing?'...':'Generate'}</button>
                                     </div>
