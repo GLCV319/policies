@@ -37,7 +37,12 @@
             const app = initializeApp(firebaseConfig);
             window.db = getFirestore(app);
             window.auth = getAuth(app);
-            window.collection = collection; window.addDoc = addDoc; window.getDocs = getDocs; window.updateDoc = updateDoc; window.deleteDoc = deleteDoc; window.setDoc = setDoc; window.getDoc = getDoc; window.doc = doc; window.onSnapshot = onSnapshot; window.query = query; window.orderBy = orderBy; window.where = where; window.signInAnonymously = signInAnonymously;
+            // Expose for React
+            window.collection = collection; window.addDoc = addDoc; window.getDocs = getDocs; 
+            window.updateDoc = updateDoc; window.deleteDoc = deleteDoc; window.setDoc = setDoc; 
+            window.getDoc = getDoc; window.doc = doc; window.onSnapshot = onSnapshot; 
+            window.query = query; window.orderBy = orderBy; window.where = where; 
+            window.signInAnonymously = signInAnonymously;
         } catch (e) { console.error("Firebase Init Error:", e); }
     </script>
 
@@ -69,7 +74,7 @@
         
         .njra-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .njra-btn-primary { background-color: #af3030 !important; color: white !important; }
-        .njra-btn-primary:hover { background-color: #942626 !important; transform: translateY(-1px); shadow: 0 4px 6px rgba(175, 48, 48, 0.2); }
+        .njra-btn-primary:hover { background-color: #942626 !important; transform: translateY(-1px); }
         .njra-btn-quik { background-color: #0f766e !important; color: white !important; }
         .njra-btn-quik:hover { background-color: #0d5f58 !important; transform: translateY(-1px); }
         .njra-btn-secondary { background-color: #374151 !important; color: white !important; }
@@ -122,6 +127,7 @@
             const [view, setView] = useState('home');
             const [policies, setPolicies] = useState([]);
             const [bundles, setBundles] = useState([]);
+            
             const [selectedPolicy, setSelectedPolicy] = useState(null);
             const [activeBundle, setActiveBundle] = useState(null); 
             const [courseState, setCourseState] = useState({ active: false, index: 0, mode: 'read' }); 
@@ -149,6 +155,11 @@
                 init();
             }, []);
 
+            const updateSystemTimestamp = async () => {
+                const now = new Date().toLocaleString();
+                await window.setDoc(window.doc(window.db, 'metadata', 'system'), { lastUpdated: now });
+            };
+
             const callAI = async (userContent) => {
                 const response = await fetch("[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)", {
                     method: "POST",
@@ -172,11 +183,44 @@
                         const items = json.policies || (Array.isArray(json) ? json : [json]);
                         for(let item of items) await window.addDoc(window.collection(window.db, 'policies'), item);
                     }
+                    await updateSystemTimestamp();
                     alert("Processing Complete!");
                     setUploadQueue([]);
                 } catch(e) { alert("Error: " + e.message); }
                 setIsProcessing(false); setStatus("");
             };
+
+            const createFromTopic = async () => { 
+                if(!newPolicyTopic) return; 
+                setIsProcessing(true); 
+                try { 
+                    const data = await callAI(`Create respiratory policy/quiz for: "${newPolicyTopic}"`); 
+                    const json = cleanAndParseJSON(data.choices[0].message.content); 
+                    await window.addDoc(window.collection(window.db, 'policies'), json); 
+                    await updateSystemTimestamp();
+                    alert("Created!"); 
+                    setNewPolicyTopic(""); 
+                } catch(e) { alert(e.message); } 
+                setIsProcessing(false); 
+            };
+
+            const runPolicyUpdate = async (policy) => {
+                if (!apiKey) return alert("Please enter API Key");
+                if (!confirm(`AI Update for "${policy.title}"?`)) return;
+                setIsProcessing(true);
+                try {
+                    const data = await callAI(`${SYSTEM_PROMPT}\n\nTASK: Update this policy code "${policy.code}". Content: ${policy.content}`);
+                    const content = cleanAndParseJSON(data.choices[0].message.content);
+                    const updatedItem = Array.isArray(content) ? content[0] : (content.policies ? content.policies[0] : content);
+                    await window.updateDoc(window.doc(window.db, 'policies', policy.id), updatedItem);
+                    await updateSystemTimestamp();
+                    alert("Updated!");
+                } catch(e) { alert(e.message); }
+                setIsProcessing(false);
+            };
+
+            const updateDbCategory = async (id, newCat) => { try { await window.updateDoc(window.doc(window.db, 'policies', id), { category: newCat }); await updateSystemTimestamp(); } catch(e) { alert("Update failed: " + e.message); } };
+            const handleDelete = async (id) => { if(!confirm("Delete?")) return; try { await window.deleteDoc(window.doc(window.db, 'policies', id)); await updateSystemTimestamp(); } catch(e) { alert(e.message); } };
 
             const startCourse = (bundle) => { setActiveBundle(bundle); setCourseState({ active: true, index: 0, mode: 'read' }); setView('course_player'); };
             const handleCourseStepComplete = (passed) => {
@@ -234,21 +278,13 @@
                                 <p className="text-red-100 text-lg mb-8 max-w-2xl mx-auto font-light">
                                     The centralized hub for clinical protocols, staff competencies, and training bundles.
                                 </p>
-                                {/* FLOATING SEARCH */}
                                 <div className="max-w-2xl mx-auto relative transform translate-y-4">
                                     <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
                                         <i className="fas fa-search text-gray-400 text-lg"></i>
                                     </div>
-                                    <input 
-                                        type="text" 
-                                        className="block w-full pl-14 pr-6 py-4 rounded-full shadow-xl border-none focus:ring-4 focus:ring-red-300/50 text-gray-700 text-lg transition-all outline-none" 
-                                        placeholder="Search by keyword, code (e.g., RT-101), or topic..." 
-                                        value={searchTerm} 
-                                        onChange={(e) => setSearchTerm(e.target.value)} 
-                                    />
+                                    <input type="text" className="block w-full pl-14 pr-6 py-4 rounded-full shadow-xl border-none focus:ring-4 focus:ring-red-300/50 text-gray-700 text-lg transition-all outline-none" placeholder="Search by keyword, code (e.g., RT-101), or topic..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
                             </div>
-                            {/* Decorative Background Elements */}
                             <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
                             <div className="absolute bottom-0 right-0 w-96 h-96 bg-black/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3"></div>
                         </div>
@@ -256,7 +292,6 @@
                         {/* MAIN CONTENT AREA */}
                         <div className="max-w-6xl mx-auto px-6 pb-12 w-full -mt-6 relative z-20">
                             
-                            {/* BUNDLES */}
                             {bundles.length > 0 && !searchTerm && (
                                 <div className="mb-12 animate-fade-in">
                                     <div className="flex items-center gap-2 mb-4 ml-1">
@@ -269,68 +304,32 @@
                                 </div>
                             )}
 
-                            {/* POLICY TABLE */}
                             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-fade-in">
                                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 bg-gray-100 rounded text-gray-500"><i className="fas fa-file-alt"></i></div>
-                                        <div>
-                                            <h2 className="text-lg font-bold text-gray-800">Document Library</h2>
-                                            <p className="text-xs text-gray-500">Last Updated: {lastUpdated}</p>
-                                        </div>
+                                        <div><h2 className="text-lg font-bold text-gray-800">Document Library</h2><p className="text-xs text-gray-500">Last Updated: {lastUpdated}</p></div>
                                     </div>
-                                    <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200 font-mono">
-                                        {filteredPolicies.length} Records
-                                    </span>
+                                    <span className="text-sm text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200 font-mono">{filteredPolicies.length} Records</span>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-100">
-                                        <thead className="bg-gray-50/50">
-                                            <tr>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Code</th>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Policy Title</th>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th>
-                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                                            </tr>
-                                        </thead>
+                                        <thead className="bg-gray-50/50"><tr><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Code</th><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Policy Title</th><th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Category</th><th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th></tr></thead>
                                         <tbody className="bg-white divide-y divide-gray-100">
                                             {filteredPolicies.map(p => (
                                                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors group">
-                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-500 cursor-pointer group-hover:text-blue-600 font-medium">
-                                                        {p.code || <span className="text-gray-300">-</span>}
-                                                    </td>
-                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 text-sm text-gray-800 font-medium cursor-pointer group-hover:text-blue-600">
-                                                        {p.title}
-                                                    </td>
-                                                    <td className="px-6 py-4 hidden md:table-cell">
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                            {p.category || "General"}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <button onClick={()=>{setSelectedPolicy(p); setView('quiz');}} className="text-quik-600 hover:text-quik-500 bg-quik-50 hover:bg-quik-100 px-3 py-1 rounded transition-colors font-bold text-xs">
-                                                            Take Quiz
-                                                        </button>
-                                                    </td>
+                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-500 cursor-pointer group-hover:text-blue-600 font-medium">{p.code || <span className="text-gray-300">-</span>}</td>
+                                                    <td onClick={()=> {setSelectedPolicy(p); setView('detail');}} className="px-6 py-4 text-sm text-gray-800 font-medium cursor-pointer group-hover:text-blue-600">{p.title}</td>
+                                                    <td className="px-6 py-4 hidden md:table-cell"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{p.category || "General"}</span></td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={()=>{setSelectedPolicy(p); setView('quiz');}} className="text-quik-600 hover:text-quik-500 bg-quik-50 hover:bg-quik-100 px-3 py-1 rounded transition-colors font-bold text-xs">Take Quiz</button></td>
                                                 </tr>
                                             ))}
-                                            {filteredPolicies.length === 0 && (
-                                                <tr>
-                                                    <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
-                                                        <i className="fas fa-folder-open text-4xl mb-3 opacity-20"></i>
-                                                        <p>No documents found matching "{searchTerm}"</p>
-                                                    </td>
-                                                </tr>
-                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div className="mt-auto bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400">
-                            &copy; 2025 New Jersey Respiratory Associates. Internal Use Only.
-                        </div>
+                        <div className="mt-auto bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400">&copy; 2025 New Jersey Respiratory Associates. Internal Use Only.</div>
                     </div>
                 );
             };
@@ -344,16 +343,8 @@
                             <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 text-yellow-500 text-4xl"><i className="fas fa-trophy"></i></div>
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">Bundle Completed!</h1>
                             <p className="text-lg text-gray-500 mb-8">You have successfully completed <strong>{activeBundle.title}</strong>.</p>
-                            <div className="flex justify-center gap-4 no-print">
-                                <button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-certificate mr-2"></i> Print Certificate</button>
-                                <button onClick={()=>setView('home')} className="njra-btn njra-btn-outline">Return Home</button>
-                            </div>
-                            <div className="print-only print-cover-page border-8 border-double border-njra-900 p-12">
-                                <div className="text-5xl font-serif font-bold text-njra-500 mb-8">Certificate of Completion</div>
-                                <h2 className="text-4xl font-bold border-b-2 border-black pb-4 mb-4 inline-block">{activeBundle.title}</h2>
-                                <div className="text-left mt-8 w-full max-w-2xl mx-auto"><p className="font-bold mb-2">Modules Verified:</p><ul className="list-disc pl-5">{bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}</ul></div>
-                                <div className="mt-auto w-full flex justify-between px-12 pt-12"><div className="text-center border-t border-black pt-2 w-64">Employee Signature</div><div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div></div>
-                            </div>
+                            <div className="flex justify-center gap-4 no-print"><button onClick={()=>window.print()} className="njra-btn njra-btn-primary"><i className="fas fa-certificate mr-2"></i> Print Certificate</button><button onClick={()=>setView('home')} className="njra-btn njra-btn-outline">Return Home</button></div>
+                            <div className="print-only print-cover-page border-8 border-double border-njra-900 p-12"><div className="text-5xl font-serif font-bold text-njra-500 mb-8">Certificate of Completion</div><h2 className="text-4xl font-bold border-b-2 border-black pb-4 mb-4 inline-block">{activeBundle.title}</h2><div className="text-left mt-8 w-full max-w-2xl mx-auto"><p className="font-bold mb-2">Modules Verified:</p><ul className="list-disc pl-5">{bundlePolicies.map((p,i) => <li key={i} className="mb-1">{p.title}</li>)}</ul></div><div className="mt-auto w-full flex justify-between px-12 pt-12"><div className="text-center border-t border-black pt-2 w-64">Employee Signature</div><div className="text-center border-t border-black pt-2 w-64">Instructor Signature</div></div></div>
                         </div>
                     );
                 }
@@ -414,20 +405,126 @@
                 );
             };
 
+            // --- FULL ADMIN DASHBOARD RESTORED ---
             const AdminDashboard = () => {
                 const [title, setTitle] = useState("");
                 const [desc, setDesc] = useState("");
                 const [selectedIds, setSelectedIds] = useState(new Set());
-                const saveBundle = async () => { await window.addDoc(window.collection(window.db, 'bundles'), { title, description: desc, policyIds: Array.from(selectedIds) }); alert("Bundle Saved"); setTitle(""); setDesc(""); setSelectedIds(new Set()); };
-                const createTopic = async () => { if(!newPolicyTopic) return; setIsProcessing(true); try { const data = await callAI(`Create respiratory policy/quiz for: "${newPolicyTopic}"`); const json = cleanAndParseJSON(data.choices[0].message.content); await window.addDoc(window.collection(window.db, 'policies'), json); alert("Created!"); setNewPolicyTopic(""); } catch(e) { alert(e.message); } setIsProcessing(false); };
+                const [adminSearch, setAdminSearch] = useState("");
+
+                const saveBundle = async () => { 
+                    if(!title) return alert("Title required");
+                    await window.addDoc(window.collection(window.db, 'bundles'), { title, description: desc, policyIds: Array.from(selectedIds) }); 
+                    alert("Bundle Saved"); setTitle(""); setDesc(""); setSelectedIds(new Set()); 
+                };
+
+                const filteredDbPolicies = policies.filter(p => p.title.toLowerCase().includes(adminSearch.toLowerCase()));
+
                 return (
-                    <div className="max-w-5xl mx-auto p-6 bg-white min-h-screen">
-                         <div className="flex justify-between items-center mb-6 border-b pb-4"><h2 className="text-xl font-bold text-njra-900">Admin Dashboard</h2><button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit</button></div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                            <div className="border p-4 rounded-xl bg-gray-50"><h3 className="font-bold mb-2">1. Config & AI</h3><input type="password" placeholder="OpenAI Key" className="border p-2 rounded w-full mb-2" value={apiKey} onChange={e=>setApiKey(e.target.value)} /><div className="flex gap-2"><input className="border p-2 rounded flex-grow" placeholder="Topic..." value={newPolicyTopic} onChange={e=>setNewPolicyTopic(e.target.value)} /><button onClick={createTopic} disabled={isProcessing} className="njra-btn njra-btn-primary">{isProcessing?'...':'Generate'}</button></div></div>
-                            <div className="border p-4 rounded-xl bg-gray-50"><h3 className="font-bold mb-2">2. Upload Docs</h3><label className="njra-btn njra-btn-secondary w-full cursor-pointer"><input type="file" multiple className="hidden" onChange={e=>setUploadQueue(Array.from(e.target.files))} />Select Files ({uploadQueue.length})</label>{uploadQueue.length>0 && <button onClick={processQueue} className="mt-2 w-full njra-btn njra-btn-primary">Process {uploadQueue.length} Files</button>}</div>
+                    <div className="max-w-6xl mx-auto p-8 bg-white min-h-screen">
+                         <div className="flex justify-between items-center mb-8 border-b pb-4">
+                             <h2 className="text-2xl font-bold text-njra-900">Admin Dashboard</h2>
+                             <button onClick={() => setView('home')} className="njra-btn njra-btn-secondary text-sm">Exit Admin</button>
                          </div>
-                         <div className="border p-6 rounded-xl bg-white shadow-sm"><h3 className="font-bold text-lg text-quik-500 mb-4">3. QuikComp Builder</h3><div className="flex gap-6"><div className="flex-1 space-y-4"><input className="w-full border p-2 rounded" placeholder="Bundle Title" value={title} onChange={e=>setTitle(e.target.value)} /><textarea className="w-full border p-2 rounded" placeholder="Description" value={desc} onChange={e=>setDesc(e.target.value)} rows="2"></textarea><div className="h-48 overflow-y-auto border p-2 rounded bg-gray-50">{policies.map(p=>(<div key={p.id}><label className="flex items-center gap-2 p-1 hover:bg-gray-100 cursor-pointer"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={()=>{const s=new Set(selectedIds); if(s.has(p.id)) s.delete(p.id); else s.add(p.id); setSelectedIds(s);}} /><span className="text-sm">{p.title}</span></label></div>))}</div><button onClick={saveBundle} className="w-full njra-btn njra-btn-quik">Save Bundle</button></div><div className="flex-1 border-l pl-6"><h4 className="font-bold mb-2">Existing Bundles</h4>{bundles.map(b=>(<div key={b.id} className="flex justify-between p-2 border-b"><span className="text-sm font-bold">{b.title}</span><button onClick={()=>window.deleteDoc(window.doc(window.db,'bundles',b.id))} className="text-red-500"><i className="fas fa-trash"></i></button></div>))}</div></div></div>
+                         
+                         {/* 1. CONFIG & UPLOAD GRID */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                            {/* CONFIG */}
+                            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+                                <h3 className="font-bold text-lg text-njra-900 mb-4 border-b pb-2">1. System Configuration</h3>
+                                <div className="space-y-4">
+                                    <input type="password" placeholder="OpenAI API Key" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-njra-500 outline-none" value={apiKey} onChange={e=>setApiKey(e.target.value)} />
+                                    <div className="flex gap-2">
+                                        <input className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-njra-500 outline-none" placeholder="Generate Topic (e.g. Fire Safety)" value={newPolicyTopic} onChange={e=>setNewPolicyTopic(e.target.value)} />
+                                        <button onClick={createFromTopic} disabled={isProcessing} className="njra-btn njra-btn-primary whitespace-nowrap">{isProcessing?'...':'Generate'}</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* UPLOAD */}
+                            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+                                <h3 className="font-bold text-lg text-njra-900 mb-4 border-b pb-2">2. Batch Upload</h3>
+                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-gray-50">
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <i className="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                                        <p className="text-sm text-gray-500">Click to upload .docx files</p>
+                                    </div>
+                                    <input type="file" multiple className="hidden" onChange={e=>setUploadQueue(Array.from(e.target.files))} />
+                                </label>
+                                {uploadQueue.length > 0 && (
+                                    <button onClick={processQueue} className="mt-4 w-full njra-btn njra-btn-primary shadow-lg">
+                                        Process {uploadQueue.length} Files with AI
+                                    </button>
+                                )}
+                            </div>
+                         </div>
+
+                         {/* 3. MANAGE DATABASE (RESTORED) */}
+                         <div className="bg-white border border-gray-200 rounded-xl shadow-sm mb-10 overflow-hidden">
+                             <div className="p-6 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                 <h3 className="font-bold text-lg text-njra-900">3. Manage Database</h3>
+                                 <input type="text" placeholder="Search Policies..." className="border p-2 rounded text-sm w-64" value={adminSearch} onChange={e=>setAdminSearch(e.target.value)} />
+                             </div>
+                             <div className="max-h-80 overflow-y-auto">
+                                 {filteredDbPolicies.map(p => (
+                                     <div key={p.id} className="flex justify-between items-center p-4 border-b hover:bg-gray-50 transition-colors">
+                                         <div className="flex-1">
+                                             <div className="font-bold text-gray-800">{p.title}</div>
+                                             <div className="text-xs text-gray-500 font-mono">{p.code}</div>
+                                         </div>
+                                         <div className="flex items-center gap-3">
+                                             <button onClick={() => runPolicyUpdate(p)} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 bg-blue-50 px-2 py-1 rounded flex items-center gap-1" title="Run AI Update">
+                                                <i className="fas fa-magic"></i> AI Update
+                                             </button>
+                                             <select 
+                                                className="text-xs border rounded p-1 bg-white"
+                                                value={p.category || "Uncategorized"}
+                                                onChange={(e) => updateDbCategory(p.id, e.target.value)}
+                                             >
+                                                {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                             </select>
+                                             <button onClick={()=>handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2"><i className="fas fa-trash"></i></button>
+                                         </div>
+                                     </div>
+                                 ))}
+                             </div>
+                         </div>
+
+                         {/* 4. QUIKCOMP BUILDER (RESTORED) */}
+                         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+                            <h3 className="font-bold text-lg text-quik-600 mb-4 border-b pb-2">4. QuikComp Bundle Builder</h3>
+                            <div className="flex flex-col md:flex-row gap-8">
+                                <div className="flex-1 space-y-4">
+                                    <input className="w-full border p-3 rounded-lg" placeholder="Bundle Title (e.g. ICU Orientation)" value={title} onChange={e=>setTitle(e.target.value)} />
+                                    <textarea className="w-full border p-3 rounded-lg" placeholder="Short Description" value={desc} onChange={e=>setDesc(e.target.value)} rows="2"></textarea>
+                                    <div className="h-64 overflow-y-auto border p-2 rounded-lg bg-gray-50">
+                                        <p className="text-xs font-bold text-gray-400 uppercase mb-2 px-2">Select Policies to Include:</p>
+                                        {policies.map(p=>(
+                                            <div key={p.id} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer">
+                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={()=>{const s=new Set(selectedIds); if(s.has(p.id)) s.delete(p.id); else s.add(p.id); setSelectedIds(s);}} />
+                                                <span className="text-sm">{p.title}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={saveBundle} className="w-full njra-btn njra-btn-quik shadow-md">Save New Bundle</button>
+                                </div>
+                                <div className="flex-1 border-l pl-8">
+                                    <h4 className="font-bold text-gray-700 mb-4">Existing Bundles</h4>
+                                    <div className="space-y-3">
+                                        {bundles.map(b=>(
+                                            <div key={b.id} className="flex justify-between items-center p-3 border rounded-lg bg-gray-50">
+                                                <div>
+                                                    <div className="font-bold text-sm text-gray-800">{b.title}</div>
+                                                    <div className="text-xs text-gray-500">{b.policyIds ? b.policyIds.length : 0} Modules</div>
+                                                </div>
+                                                <button onClick={()=>window.deleteDoc(window.doc(window.db,'bundles',b.id))} className="text-red-400 hover:text-red-600"><i className="fas fa-trash"></i></button>
+                                            </div>
+                                        ))}
+                                        {bundles.length === 0 && <p className="text-sm text-gray-400 italic">No bundles created yet.</p>}
+                                    </div>
+                                </div>
+                            </div>
+                         </div>
                     </div>
                 );
             };
